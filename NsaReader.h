@@ -2,7 +2,7 @@
  *
  *  NsaReader.h - Reader from a NSA archive
  *
- *  Copyright (c) 2001-2014 Ogapee. All rights reserved.
+ *  Copyright (c) 2001-2019 Ogapee. All rights reserved.
  *
  *  ogapee@aqua.dti2.ne.jp
  *
@@ -50,11 +50,12 @@ private:
     bool sar_flag;
     int nsa_offset;
     int archive_type;
-    int num_of_nsa_archives;
+    int num_of_nsa_archives[2];
     int num_of_ns2_archives;
     const char *nsa_archive_ext;
     const char *ns2_archive_ext;
-    ArchiveInfo archive_info2[MAX_EXTRA_ARCHIVE];
+    ArchiveInfo archive_info_patch;
+    ArchiveInfo archive_info2[2][MAX_EXTRA_ARCHIVE];
     ArchiveInfo archive_info_ns2[MAX_NS2_ARCHIVE];
 
     size_t getFileLengthSub( ArchiveInfo *ai, const char *file_name );

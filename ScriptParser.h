@@ -2,7 +2,7 @@
  * 
  *  ScriptParser.h - Define block parser of ONScripter
  *
- *  Copyright (c) 2001-2016 Ogapee. All rights reserved.
+ *  Copyright (c) 2001-2020 Ogapee. All rights reserved.
  *
  *  ogapee@aqua.dti2.ne.jp
  *
@@ -67,7 +67,7 @@ public:
     void reset();
     int  openScript();
     void setCurrentLabel( const char *label );
-    void gosubReal( const char *label, char *next_script, bool textgosub_flag=false );
+    void gosubReal( const char *label, char *next_script, bool textgosub_flag=false, bool pretextgosub_flag=false );
     int getStringBufferOffset(){return string_buffer_offset;};
 
     FILE *fopen(const char *path, const char *mode, bool use_save_dir=false);
@@ -194,12 +194,14 @@ protected:
         int  nest_mode;
         char *next_script; // used in gosub and for
         int  var_no, to, step; // used in for
-        bool textgosub_flag; // used in textgosub and pretextgosub
+        bool textgosub_flag; // used in textgosub
+        bool pretextgosub_flag; // used in pretextgosub
 
         NestInfo(){
             previous = next = NULL;
             nest_mode = LABEL;
             textgosub_flag = false;
+            pretextgosub_flag = false;
         };
     } last_tilde;
 
@@ -276,7 +278,7 @@ protected:
     char *save_dir_envdata;
 
     void deleteNestInfo();
-    void setStr( char **dst, const char *src, int num=-1 );
+    void setStr( char **dst, const char *src, int num = -1, bool to_utf8 = false );
     
     void readToken();
 
@@ -336,11 +338,11 @@ protected:
     struct SaveFileInfo{
         bool valid;
         int  month, day, hour, minute;
-        char sjis_no[5];
-        char sjis_month[5];
-        char sjis_day[5];
-        char sjis_hour[5];
-        char sjis_minute[5];
+        char sjis_no[7];
+        char sjis_month[7];
+        char sjis_day[7];
+        char sjis_hour[7];
+        char sjis_minute[7];
     };
     unsigned int num_save_file;
     char *save_menu_name;
@@ -388,6 +390,7 @@ protected:
             return ch;
         };
     } *page_list, *start_page, *current_page; // ring buffer
+    int  current_read_language;
     int  max_page_list;
     int  clickstr_line;
     int  clickstr_state;
@@ -399,11 +402,11 @@ protected:
     bool english_mode;
 
     struct Kinsoku {
-        char chr[2];
+        unsigned short unicode;
     } *start_kinsoku, *end_kinsoku;
     bool is_kinsoku;
     int num_start_kinsoku, num_end_kinsoku;
-    void setKinsoku(const char *start_chrs, const char *end_chrs, bool add);
+    void setKinsoku(const char *start_chrs, const char *end_chrs, bool add, int code = -1);
     bool isStartKinsoku(const char *str);
     bool isEndKinsoku(const char *str);
     

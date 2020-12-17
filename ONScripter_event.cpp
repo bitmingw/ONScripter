@@ -2,7 +2,7 @@
  * 
  *  ONScripter_event.cpp - Event handler of ONScripter
  *
- *  Copyright (c) 2001-2016 Ogapee. All rights reserved.
+ *  Copyright (c) 2001-2020 Ogapee. All rights reserved.
  *
  *  ogapee@aqua.dti2.ne.jp
  *
@@ -370,7 +370,8 @@ bool ONScripter::waitEvent( int count )
     
     while(1){
         waitEventSub( count );
-        if ( system_menu_mode == SYSTEM_NULL ) break;
+        if (system_menu_mode == SYSTEM_NULL ||
+            script_h.isExternalScript()) break;
         int ret = executeSystemCall();
         if      (ret == 1) return true;
         else if (ret == 2) return false;
@@ -411,7 +412,6 @@ bool ONScripter::trapHandler()
     }
     
     trap_mode = TRAP_NONE;
-    stopAnimation( clickstr_state );
     setCurrentLabel( trap_dist );
     current_button_state.button = 0; // to escape from screen effect
 
@@ -531,7 +531,6 @@ bool ONScripter::mousePressEvent( SDL_MouseButtonEvent *event )
         if (!(event_mode & (WAIT_TEXT_MODE)))
             skip_mode |= SKIP_TO_EOL;
         playClickVoice();
-        stopAnimation( clickstr_state );
 
         return true;
     }
@@ -755,7 +754,6 @@ bool ONScripter::keyDownEvent( SDL_KeyboardEvent *event )
   ctrl_pressed:
     current_button_state.button  = 0;
     playClickVoice();
-    stopAnimation( clickstr_state );
 
     return true;
 }
@@ -878,7 +876,6 @@ bool ONScripter::keyPressEvent( SDL_KeyboardEvent *event )
             sprintf(current_button_state.str, "SPACE");
         }
         playClickVoice();
-        stopAnimation( clickstr_state );
 
         return true;
     }
@@ -1001,11 +998,8 @@ bool ONScripter::keyPressEvent( SDL_KeyboardEvent *event )
             sprintf(current_button_state.str, "SHIFT");
         }
         
-        if ( current_button_state.button != 0 ){
-            stopAnimation( clickstr_state );
-
+        if ( current_button_state.button != 0 )
             return true;
-        }
     }
 
     if ( event_mode & WAIT_INPUT_MODE &&
@@ -1016,7 +1010,6 @@ bool ONScripter::keyPressEvent( SDL_KeyboardEvent *event )
             if (!(event_mode & WAIT_TEXT_MODE))
                 skip_mode |= SKIP_TO_EOL;
             playClickVoice();
-            stopAnimation( clickstr_state );
 
             return true;
         }
@@ -1026,7 +1019,6 @@ bool ONScripter::keyPressEvent( SDL_KeyboardEvent *event )
         if (event->keysym.sym == SDLK_s && !automode_flag ){
             skip_mode |= SKIP_NORMAL;
             printf("toggle skip to true\n");
-            stopAnimation( clickstr_state );
 
             return true;
         }
@@ -1036,17 +1028,13 @@ bool ONScripter::keyPressEvent( SDL_KeyboardEvent *event )
             else
                 skip_mode |= SKIP_TO_EOP;
             printf("toggle draw one page flag to %s\n", (skip_mode & SKIP_TO_EOP?"true":"false") );
-            if ( skip_mode & SKIP_TO_EOP ){
-                stopAnimation( clickstr_state );
-
+            if ( skip_mode & SKIP_TO_EOP )
                 return true;
-            }
         }
         else if ( event->keysym.sym == SDLK_a && !automode_flag ){
             automode_flag = true;
             skip_mode &= ~SKIP_NORMAL;
             printf("change to automode\n");
-            stopAnimation( clickstr_state );
 
             return true;
         }
@@ -1325,10 +1313,8 @@ void ONScripter::runEventLoop()
 
             if (event_mode & (WAIT_INPUT_MODE | WAIT_BUTTON_MODE) && 
                 ( clickstr_state == CLICK_WAIT || 
-                  clickstr_state == CLICK_NEWPAGE ) ){
-                playClickVoice(); 
-                stopAnimation( clickstr_state ); 
-            }
+                  clickstr_state == CLICK_NEWPAGE ) )
+                playClickVoice();
 
             return;
             

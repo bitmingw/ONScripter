@@ -2,7 +2,7 @@
  *
  *  ONScripter_file2.cpp - FILE I/O of ONScripter
  *
- *  Copyright (c) 2001-2016 Ogapee. All rights reserved.
+ *  Copyright (c) 2001-2020 Ogapee. All rights reserved.
  *
  *  ogapee@aqua.dti2.ne.jp
  *
@@ -444,7 +444,6 @@ int ONScripter::loadSaveFile2( int file_version )
 
     display_mode = shelter_display_mode = DISPLAY_MODE_TEXT;
     clickstr_state = CLICK_NONE;
-    draw_cursor_flag = false;
     
     return 0;
 }

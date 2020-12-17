@@ -2,7 +2,7 @@
  * 
  *  onscripter_main.cpp -- main function of ONScripter
  *
- *  Copyright (c) 2001-2016 Ogapee. All rights reserved.
+ *  Copyright (c) 2001-2020 Ogapee. All rights reserved.
  *
  *  ogapee@aqua.dti2.ne.jp
  *
@@ -102,7 +102,7 @@ void optionHelp()
 void optionVersion()
 {
     printf("Written by Ogapee <ogapee@aqua.dti2.ne.jp>\n\n");
-    printf("Copyright (c) 2001-2016 Ogapee.\n");
+    printf("Copyright (c) 2001-2020 Ogapee.\n");
     printf("This is free software; see the source for copying conditions.\n");
     exit(0);
 }
@@ -112,10 +112,12 @@ extern "C"
 {
 #include <jni.h>
 #include <android/log.h>
+#include <errno.h>
 static JavaVM *jniVM = NULL;
 static jobject JavaONScripter = NULL;
 static jmethodID JavaPlayVideo = NULL;
 static jmethodID JavaGetFD = NULL;
+static jmethodID JavaMkdir = NULL;
 
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved)
 {
@@ -141,6 +143,8 @@ JNIEXPORT jint JNICALL JAVA_EXPORT_NAME(ONScripter_nativeInitJavaCallbacks) (JNI
     jclass JavaONScripterClass = jniEnv->GetObjectClass(JavaONScripter);
     JavaPlayVideo = jniEnv->GetMethodID(JavaONScripterClass, "playVideo", "([C)V");
     JavaGetFD = jniEnv->GetMethodID(JavaONScripterClass, "getFD", "([CI)I");
+    JavaMkdir = jniEnv->GetMethodID(JavaONScripterClass, "mkdir", "([C)I");
+    return 0;
 }
 
 JNIEXPORT jint JNICALL 
@@ -178,8 +182,11 @@ void playVideoAndroid(const char *filename)
 #undef fopen
 FILE *fopen_ons(const char *path, const char *mode)
 {
+    int mode2 = 0;
+    if (mode[0] == 'w') mode2 = 1;
+
     FILE *fp = fopen(path, mode);
-    if (fp) return fp;
+    if (fp || mode2 ==0 || errno != EACCES) return fp;
     
     JNIEnv * jniEnv = NULL;
     jniVM->AttachCurrentThread(&jniEnv, NULL);
@@ -194,13 +201,37 @@ FILE *fopen_ons(const char *path, const char *mode)
         jc[i] = path[i];
     jcharArray jca = jniEnv->NewCharArray(strlen(path));
     jniEnv->SetCharArrayRegion(jca, 0, strlen(path), jc);
-    int mode2 = 0;
-    if (mode[0] == 'w') mode2 = 1;
     int fd = jniEnv->CallIntMethod( JavaONScripter, JavaGetFD, jca, mode2 );
     jniEnv->DeleteLocalRef(jca);
     delete[] jc;
 
     return fdopen(fd, mode);
+}
+
+#undef mkdir
+extern int mkdir(const char *pathname, mode_t mode);
+int mkdir_ons(const char *pathname, mode_t mode)
+{
+    if (mkdir(pathname, mode) == 0 || errno != EACCES) return 0;
+    
+    JNIEnv * jniEnv = NULL;
+    jniVM->AttachCurrentThread(&jniEnv, NULL);
+
+    if (!jniEnv){
+        __android_log_print(ANDROID_LOG_ERROR, "ONS", "ONScripter::mkdir: Java VM AttachCurrentThread() failed");
+        return -1;
+    }
+
+    jchar *jc = new jchar[strlen(pathname)];
+    for (int i=0 ; i<strlen(pathname) ; i++)
+        jc[i] = pathname[i];
+    jcharArray jca = jniEnv->NewCharArray(strlen(pathname));
+    jniEnv->SetCharArrayRegion(jca, 0, strlen(pathname), jc);
+    int ret = jniEnv->CallIntMethod( JavaONScripter, JavaMkdir, jca );
+    jniEnv->DeleteLocalRef(jca);
+    delete[] jc;
+
+    return ret;
 }
 }
 #endif
@@ -374,7 +405,9 @@ int main( int argc, char **argv )
     // ----------------------------------------
     // Run ONScripter
 
+#if !defined(ANDROID) 
     if (ons.openScript()) exit(-1);
+#endif
     if (ons.init()) exit(-1);
     ons.executeLabel();
     

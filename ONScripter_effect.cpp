@@ -2,7 +2,7 @@
  * 
  *  ONScripter_effect.cpp - Effect executer of ONScripter
  *
- *  Copyright (c) 2001-2014 Ogapee. All rights reserved.
+ *  Copyright (c) 2001-2020 Ogapee. All rights reserved.
  *
  *  ogapee@aqua.dti2.ne.jp
  *
@@ -27,31 +27,55 @@
 #define EFFECT_STRIPE_CURTAIN_WIDTH (24 * screen_ratio1 / screen_ratio2)
 #define EFFECT_QUAKE_AMP (12 * screen_ratio1 / screen_ratio2)
 
-bool ONScripter::setEffect( EffectLink *effect, bool generate_effect_dst, bool update_backup_surface )
+void ONScripter::updateEffect()
+{
+    update_effect = true;
+    dirty_rect.fill( screen_width, screen_height );
+};
+
+void ONScripter::generateEffectSrc(bool update)
+{
+    if (smpeg_info && smpeg_info->visible){
+        if (update){
+            SDL_Rect clip;
+            clip.x = clip.y = 0;
+            clip.w = effect_src_surface->w;
+            clip.h = effect_src_surface->h;
+            smpeg_info->blendOnSurface(effect_src_surface, 0, 0, clip, layer_alpha_buf);
+            effect_src_info.blendOnSurface(effect_src_surface, 0, 0, clip, layer_alpha_buf);
+        }
+        else{
+            effect_src_info.subtract(accumulation_surface, smpeg_info, layer_alpha_buf);
+            SDL_BlitSurface(accumulation_surface, NULL, effect_src_surface, NULL );
+        }
+    }
+    else{
+        if (!update)
+            SDL_BlitSurface(accumulation_surface, NULL, effect_src_surface, NULL );
+    }
+}
+
+void ONScripter::generateEffectDst(int effect_no)
+{
+    int refresh_mode = refreshMode();
+
+    if (effect_no == 1)
+        refreshSurface( effect_dst_surface, &dirty_rect.bounding_box, refresh_mode );
+    else
+        refreshSurface( effect_dst_surface, NULL, refresh_mode );
+}
+
+bool ONScripter::setEffect( EffectLink *effect )
 {
     if ( effect->effect == 0 ) return true;
 
-    if (update_backup_surface)
-        refreshSurface(backup_surface, &dirty_rect.bounding_box, REFRESH_NORMAL_MODE);
-    
     int effect_no = effect->effect;
     if (effect_cut_flag && (skip_mode & SKIP_NORMAL || ctrl_pressed_status)) 
         effect_no = 1;
 
-    SDL_BlitSurface( accumulation_surface, NULL, effect_src_surface, NULL );
-        
-    if (generate_effect_dst){
-        int refresh_mode = refreshMode();
-        if (update_backup_surface && refresh_mode == REFRESH_NORMAL_MODE){
-            SDL_BlitSurface( backup_surface, &dirty_rect.bounding_box, effect_dst_surface, &dirty_rect.bounding_box );
-        }
-        else{
-            if (effect_no == 1)
-                refreshSurface( effect_dst_surface, &dirty_rect.bounding_box, refresh_mode );
-            else
-                refreshSurface( effect_dst_surface, NULL, refresh_mode );
-        }
-    }
+    generateEffectSrc(false);
+    generateEffectDst(effect_no);
+    update_effect = false;
     
     /* Load mask image */
     if ( effect_no == 15 || effect_no == 18 ){
@@ -103,6 +127,12 @@ bool ONScripter::doEffect( EffectLink *effect, bool clear_dirty_region )
     if (effect_cut_flag && (skip_mode & SKIP_NORMAL || ctrl_pressed_status)) 
         effect_no = 1;
 
+    if (update_effect){
+        generateEffectSrc(true);
+        generateEffectDst(effect_no);
+        update_effect = false;
+    }
+    
     int i, amp;
     int width, width2;
     int height, height2;
@@ -364,6 +394,8 @@ bool ONScripter::doEffect( EffectLink *effect, bool clear_dirty_region )
         if (effect->anim.image_name != NULL){
             if (!strncmp(effect->anim.image_name, "breakup.dll", 11)){
                 effectBreakup(effect->anim.image_name, effect_duration);
+            } else if (!strncmp(effect->anim.image_name, "cascade.dll", 11)){
+                effectCascade(effect->anim.image_name, effect_duration);
             } else {
                 // do crossfade
                 height = 256 * effect_counter / effect_duration;
@@ -387,11 +419,11 @@ bool ONScripter::doEffect( EffectLink *effect, bool clear_dirty_region )
     effect_counter += effect_timer_resolution;
 
     event_mode = WAIT_INPUT_MODE;
-    waitEvent(0);
-    if ( !((automode_flag || autoclick_time > 0) ||
-           (usewheel_flag  && current_button_state.button == -5) ||
-           (!usewheel_flag && current_button_state.button == -2)) ){
-        effect_counter = effect_duration; // interrupted
+    waitEvent(0); // check for interrput
+    if (!(((automode_flag || autoclick_time > 0) && current_button_state.button == 0) ||
+          (usewheel_flag  && current_button_state.button == -5) ||
+          (!usewheel_flag && current_button_state.button == -2))){
+        effect_counter = effect_duration; // if interrupted
     }
 
     if ( effect_counter < effect_duration && effect_no != 1 ){

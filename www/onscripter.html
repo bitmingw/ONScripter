@@ -19,7 +19,8 @@
 最近あまり時間がとれないため更新が非常に遅くなることがありますがご了承下さい。<br>
 Since: Feb. 6, 2002<br>
 <!--Last updated: Mar. 21, 2016 (BTS復旧)<br>-->
-Last updated: Nov. 2, 2016 (ソース更新)<br>
+<!--Last updated: Jan. 14, 2020 (ONScripter on Windows 更新)<br>-->
+Last updated: Jul. 22, 2020 (ソース更新)<br>
 <!--Last updated: Jun. 29, 2014 (PNaCl バイナリパッケージ追加)<br>-->
 <!--Last updated: Jul. 12, 2009 (Experimental ソース更新)<br>-->
 </div> <!-- header -->
@@ -35,10 +36,11 @@ Last updated: Nov. 2, 2016 (ソース更新)<br>
       <li> <a href="#package-source">ソースパッケージ</a></li>
       <li> <a href="#package-binary">バイナリパッケージ</a></li>
       <li> <a href="#feature">特長</a>
-      <li> <a href="onscripter_devel.2016.html">開発日誌</a></li>
+      <li> <a href="onscripter_devel.2020.html">開発日誌</a></li>
       <li> <a href="/cgi-bin/kagemai/guest.cgi?project=onscripter&amp;action=top">バグ報告</a></li>
       <li> <a href="android/">ONScripter on Android</a>
       <li> <a href="ios/">ONScripter on iOS</a>
+      <li> <a href="win/">ONScripter on Widows</a>
     </ul>
   <li> <a href="#howto">実行方法</a>
     <ul>
@@ -87,10 +89,10 @@ Last updated: Nov. 2, 2016 (ソース更新)<br>
 
 <table><tr>
 <td>最新版</td>
-<td><a href="onscripter-20161102.tar.gz">onscripter-20161102.tar.gz</a></td>
+<td><a href="onscripter-20200722.tar.gz">onscripter-20200722.tar.gz</a></td>
 </tr><tr>
 <td>旧版</td>
-<td><a href="onscripter-20161025.tar.gz">onscripter-20161025.tar.gz</a></td>
+<td><a href="onscripter-20200721.tar.gz">onscripter-20200721.tar.gz</a></td>
 </tr></table>
 <!--  <li> <a href="onscripter-exp-20090712.tar.gz">onscripter-exp-20090712.tar.gz</a>(実験版, バグ修正)-->
 
@@ -101,28 +103,24 @@ Last updated: Nov. 2, 2016 (ソース更新)<br>
 
 <table>
 <tr><th>プラットフォーム</th><th>パッケージ配布サイト</th></tr>
-<tr><td rowspan=2>Android (1.6 and later)</td><td><a href="https://play.google.com/store/apps/details?id=jp.ogapee.onscripter.release">ONScripter</A> in Google Play</td></tr>
+<tr><td rowspan=2>Android (2.0 and later)</td><td><a href="https://play.google.com/store/apps/details?id=jp.ogapee.onscripter.release">ONScripter</A> in Google Play</td></tr>
 <tr><td><a href="android/">ONScripter on Android のページ</a><br>　自作ノベルゲームアプリの作成にも利用できます</td></tr>
 <tr><td>Zaurus (SL-C700, etc.)</td><td><a href="zaurus/index.html">SDL on Zaurus のページ</a></td></tr>
 
-<tr><td rowspan=5>Linux</td><td class="span">Debian 公式 <a href="http://packages.debian.org/sid/onscripter">Unstable (Sid)</a></td></tr>
-<tr><td class="span">Debian 公式 <a href="http://packages.debian.org/jessie/onscripter">Testing (Jessie)</a></td></tr>
-<tr><td class="span">Debian 公式 <a href="http://packages.debian.org/wheezy/onscripter">Stable (Wheezy)</a></td></tr>
-<tr><td class="span"><a href="http://detroit.ddo.jp/hiki.cgi?Debian">Debian 非公式 (Etch, Sarge, Woody, Potato)</a></td></tr>
-<tr><td><a href="http://unclemion.com/onscripter/">Uncle Mion's ONScripter Corner</a> <span style="color:red">(ONScripter-EN)</span></td></tr>
+<tr><td rowspan=3>Linux</td><td class="span">Debian 公式 <a href="http://packages.debian.org/sid/onscripter">Unstable (Sid)</a></td></tr>
+<tr><td class="span">Debian 公式 <a href="http://packages.debian.org/bullseye/onscripter">Testing (bullseye)</a></td></tr>
+<tr><td class="span">Debian 公式 <a href="http://packages.debian.org/buster/onscripter">Stable (buster)</a></td></tr>
 
-<tr><td rowspan=3>MacOSX</td><td class="span"><a href="https://github.com/Homebrew/homebrew-games/blob/master/onscripter.rb">Homebrew</a></td></tr>
+<tr><td rowspan=2>MacOSX</td><td class="span"><a href="https://github.com/Homebrew/homebrew-core/tree/master/Formula/onscripter.rb">Homebrew</a></td></tr>
 <tr><td><a href="http://tmkk.pv.land.to/onscripter/">ONScripter Launcher and Binary for Mac OS X</a></td></tr>
-<tr><td><a href="http://unclemion.com/onscripter/">Uncle Mion's ONScripter Corner</a> <span style="color:red">(ONScripter-EN)</span></td></tr>
 
-<tr><td rowspan=2>Windows</td><td class="span"><a href="http://www.geocities.jp/stm_torm/ons/win.html">霧雨の降る日に</a></td></tr>
-<tr><td><a href="http://unclemion.com/onscripter/">Uncle Mion's ONScripter Corner</a> <span style="color:red">(ONScripter-EN)</span></td></tr>
+<tr><td rowspan=1>Windows</td><td class="span"><a href="win/">ONScripter on Windows のページ</a></td></tr>
 
-<tr><td>PNaCl</td><td><a href="http://neo.idletime.tokyo/web/onscripter/">IdleTime</a> (Google Chrome から実行できます)</td></tr>
+<!--<tr><td>PNaCl</td><td><a href="http://neo.idletime.tokyo/web/onscripter/">IdleTime</a> (Google Chrome から実行できます)</td></tr>
 
 <tr><td>PSP</td><td><a href="https://www.dropbox.com/s/mj92ccgvwoit746/onscripter_signed/">onscripter_signed</a> (署名付, 未改造の PSP で動作可)</td></tr>
 
-<tr><td>Pandora</td><td><a href="http://sano-ya.org/pandora/onscripter/">Pandora Handheld PC / ONScripter</a></td></tr>
+<tr><td>Pandora</td><td><a href="http://sano-ya.org/pandora/onscripter/">Pandora Handheld PC / ONScripter</a></td></tr>-->
 
 <tr><td>iPhone, iPod touch</td><td><a href="http://ipodons.web.fc2.com/index.html">iPodOns</a></td></tr>
 
@@ -157,8 +155,8 @@ Last updated: Nov. 2, 2016 (ソース更新)<br>
 
 <ol>
   <li> 現時点(2011/12/15)で最新の NScripter と互換性のあるセーブファイルを入出力することもできます。<a href="#save">異なるプラットフォーム上で同時に遊ぶ方法</a>を参照してください。
-  <li> 全ての操作をキーボードから行えます。もちろんマウスも使えます。
-  <li> CD Audio の演奏を音楽ファイル(MP3, Ogg)の演奏に振り替える機能があります。
+  <li> 全ての操作をキーボードから行うことができます。もちろんマウスも使えます。
+  <li> CD Audio の再生を音楽ファイル(MP3, Ogg)の再生に変更することができます。
   <li> マルチプラットフォームに対応しており、Windows, Linux, MacOS X, MacOS 9, <a href="android/">Android</a>(1.6 以上), iPhone, iPad, PSP, <a href="zaurus/index.html">Zaurus</a>(SL-5500,SL-A300,SL-B500,SL-C700), FreeBSD, Solaris(on SPARC), Tru64 UNIX, OS/2Warp, iPod, PocketPC, Playstation3, Wii, GP2X, NetWalker, Dreamcast での動作が確認されています。それ以外のプラットフォームでも、<a href="#environment">動作環境</a>が準備できれば動作するはずです。<br>
   <li> 全ての命令・仕様を実装していないため、ゲームによっては挙動がおかしくなります。その場合は上記バグトラッキングシステムまで御報告下さい。
 </ol>
@@ -179,8 +177,8 @@ Last updated: Nov. 2, 2016 (ソース更新)<br>
 <ul>
   <li> C++ 処理系
 <ul>
-  <li> g++ 4.4.4 (Linux)
-  <li> Visual Studio 2008 C++ (Windows)
+  <li> g++ 8.3.0 (Linux)
+  <li> Visual Studio 2019 C++ (Windows)
 </ul>
   <li> Unicode で指定された日本語 TTF フォント(ファイル名は default.ttf に)
   <li> libjpeg-6b (<a href="http://www.ijg.org/">Independent JPEG Group</a>)
@@ -200,13 +198,13 @@ Ogg Vorbis 形式の音楽ファイルを再生する場合には入れてください。同梱の Makefile.L
 <h4>必要に応じて導入</h4>
 <ul>
   <li> mad-0.15.1b (<a href="http://www.mars.org/home/rob/proj/mpeg/">MAD: Mpeg Audio Decoder</a>)<br>
-整数演算のみを使用した MP3 演奏ライブラリです。Android や Zaurus で MP3 を演奏する場合には必須です。MAD を使用するためには、SMPEG の代わりに MAD を有効にしてコンパイルした SDL_mixer を使用してください。
+整数演算のみを使用した MP3 再生ライブラリです。Android や Zaurus で MP3 を再生する場合には必須です。MAD を使用するためには、SMPEG の代わりに MAD を有効にしてコンパイルした SDL_mixer を使用してください。
 
   <li> avifile-0.7.48 (<a href="http://avifile.sourceforge.net/">avifile</a>)<br>
 avi 命令を使ってムービーを再生する場合には入れてください。Linux で動作確認をしています。USE_AVIFILE を定義し AVIWrapper.o をリンクしてコンパイルすると使用されます。
 </ul>
 
-<p>当方では Linux (Debian Wheezy), <a href="android/">Android</a> (Sony (4.4.2)), <a href="ios/">iOS</a> (iPad2), (時々 Windows) で動作確認をしています。</p>
+<p>当方では Linux (Debian Buster), <a href="android/">Android</a> (Sony (8.0)), <a href="ios/">iOS</a> (iPad2), (時々 Windows) で動作確認をしています。</p>
 
 </div> <!-- sub-content -->
 
@@ -487,6 +485,9 @@ ret = 2
 <p> 文字を表示するためには、等幅の TrueType font を用意する必要があります。例えば Windows 7 には c:\Windows\Fonts の下に msgothic.ttc (ＭＳゴシック)があり、またフリーで手にはいるフォントには以下のものがあります。<br>
 
 <dl>
+  <dt> <a href="http://jikasei.me/font/genjyuu/">源柔ゴシック</a>
+  <dd> <a href="http://ja.wikipedia.org/wiki/Source_Han_Sans">源ノ角ゴシック</a>を TrueType 形式に変換し、角を丸める加工を行い丸ゴシック風にした派生フォントです。特に GenJyuuGothicX-Monospace-Bold.ttf がきれいな太字で見やすくお勧めです。
+
   <dt> <a href="http://mix-mplus-ipa.osdn.jp/">M+とIPAの合成フォント</a>
   <dd> M+ フォントと IPA フォントを元にした再配布可能なフォントです。特に Migu-2M-bold.ttf がきれいな太字で見やすくお勧めです。
 
@@ -749,7 +750,7 @@ return
 
 <div id="footer">
 メール宛先 <i>ogapee@yahoo.kp at aqua.dti2.ne.jp</i> （yahoo.kp at は除いてください）<br>
-Copyright (c) 1998-2016 Studio O.G.A. All rights reserved.
+Copyright (c) 1998-2020 Studio O.G.A. All rights reserved.
 </div> <!-- footer -->
 
 </div> <!-- body -->

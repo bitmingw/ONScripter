@@ -11466,9 +11466,9 @@ int convUTF16ToUTF8( unsigned char dst[4], unsigned short src )
     return 1;
 }
 
-unsigned short convUTF8ToUTF16( const char **src)
+unsigned short convUTF8ToUTF16( const char **src )
 {
-    unsigned short utf16=0;
+    unsigned short utf16 = 0;
     
     if (**src & 0x80){
         if (**src & 0x20){

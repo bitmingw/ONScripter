@@ -2,7 +2,7 @@
  * 
  *  ONScripter_text.cpp - Text parser of ONScripter
  *
- *  Copyright (c) 2001-2016 Ogapee. All rights reserved.
+ *  Copyright (c) 2001-2020 Ogapee. All rights reserved.
  *
  *  ogapee@aqua.dti2.ne.jp
  *
@@ -69,18 +69,9 @@ void ONScripter::shiftHalfPixelY(SDL_Surface *surface)
     SDL_UnlockSurface( surface );
 }
 
-void ONScripter::drawGlyph( SDL_Surface *dst_surface, FontInfo *info, SDL_Color &color, char* text, int xy[2], AnimationInfo *cache_info, SDL_Rect *clip, SDL_Rect &dst_rect )
+int ONScripter::drawGlyph( SDL_Surface *dst_surface, FontInfo *info, SDL_Color &color, char* text, int xy[2], AnimationInfo *cache_info, SDL_Rect *clip, SDL_Rect &dst_rect )
 {
-    unsigned short unicode;
-    if (IS_TWO_BYTE(text[0])){
-        unsigned index = ((unsigned char*)text)[0];
-        index = index << 8 | ((unsigned char*)text)[1];
-        unicode = convSJIS2UTF16( index );
-    }
-    else{
-        if ((text[0] & 0xe0) == 0xa0 || (text[0] & 0xe0) == 0xc0) unicode = ((unsigned char*)text)[0] - 0xa0 + 0xff60;
-        else unicode = text[0];
-    }
+    unsigned short unicode = script_h.enc.getUTF16(text);
 
     int minx, maxx, miny, maxy, advanced;
 #if 0
@@ -117,7 +108,8 @@ void ONScripter::drawGlyph( SDL_Surface *dst_surface, FontInfo *info, SDL_Color 
     
     dst_rect.x = xy[0] + minx;
     dst_rect.y = xy[1] + TTF_FontAscent((TTF_Font*)info->ttf_font[0]) - maxy;
-    dst_rect.y -= (TTF_FontHeight((TTF_Font*)info->ttf_font[0]) - info->font_size_xy[1]*screen_ratio1/screen_ratio2)/2;
+    if (script_h.enc.getEncoding() == Encoding::CODE_CP932)
+        dst_rect.y -= (TTF_FontHeight((TTF_Font*)info->ttf_font[0]) - info->font_size_xy[1]*screen_ratio1/screen_ratio2)/2;
 
     if ( rotate_flag ) dst_rect.x += miny - minx;
         
@@ -174,14 +166,14 @@ void ONScripter::drawGlyph( SDL_Surface *dst_surface, FontInfo *info, SDL_Color 
         SDL_FreeSurface(tmp_surface_s);
     if (tmp_surface)
         SDL_FreeSurface(tmp_surface);
+    
+    return advanced;
 }
 
-void ONScripter::drawChar( char* text, FontInfo *info, bool flush_flag, bool lookback_flag, SDL_Surface *surface, AnimationInfo *cache_info, SDL_Rect *clip )
+void ONScripter::openFont(FontInfo *fi)
 {
-    //printf("draw %x-%x[%s] %d, %d\n", text[0], text[1], text, info->xy[0], info->xy[1] );
-    
-    if ( info->ttf_font[0] == NULL ){
-        if ( info->openFont( font_file, screen_ratio1, screen_ratio2 ) == NULL ){
+    if (fi->ttf_font[0] == NULL){
+        if (fi->openFont(font_file, screen_ratio1, screen_ratio2) == NULL){
             fprintf( stderr, "can't open font file: %s\n", font_file );
             quit();
             exit(-1);
@@ -189,15 +181,28 @@ void ONScripter::drawChar( char* text, FontInfo *info, bool flush_flag, bool loo
     }
 #if defined(PSP)
     else
-        info->openFont( font_file, screen_ratio1, screen_ratio2 );
+        fi->openFont(font_file, screen_ratio1, screen_ratio2);
 #endif
+}
 
-    if ( info->isEndOfLine() ){
+void ONScripter::drawChar( char* text, FontInfo *info, bool flush_flag, bool lookback_flag, SDL_Surface *surface, AnimationInfo *cache_info, SDL_Rect *clip )
+{
+    //printf("draw %x-%x[%s] %d, %d\n", text[0], text[1], text, info->xy[0], info->xy[1] );
+    openFont(info);
+
+    if (info->isEndOfLine()){
         info->newLine();
         for (int i=0 ; i<indent_offset ; i++){
             if (lookback_flag){
-                current_page->add(0x81);
-                current_page->add(0x40);
+                if (script_h.enc.getEncoding() == Encoding::CODE_CP932){
+                    current_page->add(0x81);
+                    current_page->add(0x40);
+                }
+                else{
+                    current_page->add(0xe3);
+                    current_page->add(0x80);
+                    current_page->add(0x80);
+                }
             }
             info->advanceCharInHankaku(2);
         }
@@ -206,8 +211,10 @@ void ONScripter::drawChar( char* text, FontInfo *info, bool flush_flag, bool loo
     info->old_xy[0] = info->x(false);
     info->old_xy[1] = info->y(false);
 
-    char text2[2] = {text[0], 0};
-    if (IS_TWO_BYTE(text[0])) text2[1] = text[1];
+    char text2[4] = {};
+    int n = script_h.enc.getBytes(text[0]);
+    for (int i=0; i<n; i++)
+        text2[i] = text[i];
 
     for (int i=0 ; i<2 ; i++){
         int xy[2];
@@ -216,7 +223,8 @@ void ONScripter::drawChar( char* text, FontInfo *info, bool flush_flag, bool loo
     
         SDL_Color color = {info->color[0], info->color[1], info->color[2]};
         SDL_Rect dst_rect;
-        drawGlyph( surface, info, color, text2, xy, cache_info, clip, dst_rect );
+        float adv = drawGlyph(surface, info, color, text2, xy, cache_info, clip, dst_rect); 
+        if (n == 1) adv -= 0.5; // 0.5 is for adjusting the increse by FT_CEIL
 
         if ( surface == accumulation_surface &&
              !flush_flag &&
@@ -233,22 +241,34 @@ void ONScripter::drawChar( char* text, FontInfo *info, bool flush_flag, bool loo
             flushDirect( dst_rect, REFRESH_NONE_MODE );
         }
 
-        if (IS_TWO_BYTE(text[0])){
-            info->advanceCharInHankaku(2);
+        if (n >= 2){
+            if (script_h.enc.getEncoding() == Encoding::CODE_UTF8){
+                // handle a proportional font
+                adv += info->pitch_xy[0] - info->font_size_xy[0];
+                info->advanceCharInHankaku(adv*2.0/info->pitch_xy[0]);
+            }
+            else
+                info->advanceCharInHankaku(2);
             break;
         }
-        info->advanceCharInHankaku(1);
+        if (script_h.enc.getEncoding() == Encoding::CODE_UTF8){
+            // handle a proportional font
+            adv += info->pitch_xy[0] - info->font_size_xy[0];
+            info->advanceCharInHankaku(adv*2.0/info->pitch_xy[0]);
+        }
+        else
+            info->advanceCharInHankaku(1);
         text2[0] = text[1];
         if (text2[0] == 0) break;
     }
 
-    if ( lookback_flag ){
-        current_page->add( text[0] );
-        if (text[1]) current_page->add( text[1] );
+    if (lookback_flag){
+        for (int i=0; i<n; i++)
+            current_page->add(text[i]);
     }
 }
 
-void ONScripter::drawString( const char *str, uchar3 color, FontInfo *info, bool flush_flag, SDL_Surface *surface, SDL_Rect *rect, AnimationInfo *cache_info, bool pack_hankaku)
+void ONScripter::drawString(const char *str, uchar3 color, FontInfo *info, bool flush_flag, SDL_Surface *surface, SDL_Rect *rect, AnimationInfo *cache_info, bool pack_hankaku)
 {
     int i;
 
@@ -263,8 +283,10 @@ void ONScripter::drawString( const char *str, uchar3 color, FontInfo *info, bool
     for ( i=0 ; i<3 ; i++ ) info->color[i] = color[i];
 
     bool skip_whitespace_flag = true;
-    char text[3] = { '\0', '\0', '\0' };
-    while( *str ){
+    if (script_h.enc.getEncoding() == Encoding::CODE_UTF8)
+        skip_whitespace_flag = false;
+    char text[4] = {};
+    while(*str){
         while (*str == ' ' && skip_whitespace_flag) str++;
 
 #ifdef ENABLE_1BYTE_CHAR
@@ -274,6 +296,11 @@ void ONScripter::drawString( const char *str, uchar3 color, FontInfo *info, bool
             continue;
         }
 #endif            
+        if (script_h.enc.getEncoding() == Encoding::CODE_UTF8 &&
+            *str == script_h.enc.getTextMarker()){
+            str++;
+            continue;
+        }
 
 #ifndef FORCE_1BYTE_CHAR            
         if (cache_info && !cache_info->is_tight_region){
@@ -311,26 +338,51 @@ void ONScripter::drawString( const char *str, uchar3 color, FontInfo *info, bool
             }
         }
 #endif
-
-        if ( IS_TWO_BYTE(*str) ){
-            if ( checkLineBreak( str, info ) ){
+        int n = script_h.enc.getBytes(*str);
+        if (n >= 2){
+            if (checkLineBreak(str, info)){
                 info->newLine();
                 for (int i=0 ; i<indent_offset ; i++)
                     info->advanceCharInHankaku(2);
             }
 
-            text[0] = *str++;
-            text[1] = *str++;
-            drawChar( text, info, false, false, surface, cache_info );
+            for (int i=0; i<n; i++)
+                text[i] = *str++;
+            drawChar(text, info, false, false, surface, cache_info);
         }
         else if (*str == 0x0a || (*str == '\\' && info->is_newline_accepted)){
             info->newLine();
             str++;
         }
+        else if (script_h.enc.getEncoding() == Encoding::CODE_UTF8 &&
+                 *str == '~'){
+            while(1){
+                str++;
+                if (*str == 0x0a || *str == 0) break;
+                if (*str == '~'){
+                    str++;
+                    break;
+                }
+                if (*str == 'i'){
+                    openFont(info);
+                    info->toggleStyle(TTF_STYLE_ITALIC);
+                }
+                else if (*str == 'b'){
+                    openFont(info);
+                    info->toggleStyle(TTF_STYLE_BOLD);
+                }
+            }
+            continue;
+        }
         else if (*str){
+            if (checkLigatureLineBreak(str, info))
+                info->newLine();
             text[0] = *str++;
-            if (*str && *str != 0x0a && pack_hankaku) text[1] = *str++;
-            else                                      text[1] = 0;
+            if (*str && *str != 0x0a && pack_hankaku &&
+                script_h.enc.getEncoding() == Encoding::CODE_CP932)
+                text[1] = *str++;
+            else
+                text[1] = 0;
             drawChar( text, info, false, false, surface, cache_info );
         }
     }
@@ -353,21 +405,21 @@ void ONScripter::drawString( const char *str, uchar3 color, FontInfo *info, bool
             info->addShadeArea(scaled_clipped_rect, 0, 0, shade_distance[0], shade_distance[1]);
     }
     
-    if ( flush_flag )
-        flush( refresh_shadow_text_mode, &scaled_clipped_rect );
+    if (flush_flag)
+        flush(refresh_shadow_text_mode, &scaled_clipped_rect);
     
-    if ( rect ) *rect = clipped_rect;
+    if (rect) *rect = clipped_rect;
 }
 
 void ONScripter::restoreTextBuffer(SDL_Surface *surface)
 {
     text_info.fill( 0, 0, 0, 0 );
 
-    char out_text[3] = { '\0','\0','\0' };
+    char out_text[4] = {};
     FontInfo f_info = sentence_font;
     f_info.clear();
-    for ( int i=0 ; i<current_page->text_count ; i++ ){
-        if ( current_page->text[i] == 0x0a ){
+    for (int i=0 ; i<current_page->text_count ; i++){
+        if (current_page->text[i] == 0x0a){
             f_info.newLine();
         }
         else{
@@ -403,23 +455,49 @@ void ONScripter::restoreTextBuffer(SDL_Surface *surface)
             }
 #endif
 
-            if (IS_TWO_BYTE(out_text[0])){
-                out_text[1] = current_page->text[i+1];
+            int n = script_h.enc.getBytes(out_text[0]);
+            if (n >= 2){
+                for (int j=1 ; j<n; j++)
+                    out_text[j] = current_page->text[i+j];
                 
-                if ( checkLineBreak( current_page->text+i, &f_info ) )
+                if (checkLineBreak(current_page->text+i, &f_info))
                     f_info.newLine();
-                i++;
+                i += n-1;
+            }
+            else if (script_h.enc.getEncoding() == Encoding::CODE_UTF8 &&
+                     out_text[0] == '~'){
+                while(1){
+                    char ch = current_page->text[++i];
+                    if (ch == 0x0a || ch == 0) break;
+                    if (ch == '~'){
+                        i++;
+                        break;
+                    }
+                    if (ch == 'i'){
+                        openFont(&f_info);
+                        f_info.toggleStyle(TTF_STYLE_ITALIC);
+                    }
+                    else if (ch == 'b'){
+                        openFont(&f_info);
+                        f_info.toggleStyle(TTF_STYLE_BOLD);
+                    }
+                }
+                continue;
             }
             else{
+                if (checkLigatureLineBreak(current_page->text+i, &f_info))
+                    f_info.newLine();
+                
                 out_text[1] = 0;
                 
                 if (i+1 != current_page->text_count &&
-                    current_page->text[i+1] != 0x0a){
+                    current_page->text[i+1] != 0x0a &&
+                    script_h.enc.getEncoding() == Encoding::CODE_CP932){
                     out_text[1] = current_page->text[i+1];
                     i++;
                 }
             }
-            drawChar( out_text, &f_info, false, false, surface, &text_info );
+            drawChar(out_text, &f_info, false, false, surface, &text_info);
         }
     }
 }
@@ -432,14 +510,13 @@ void ONScripter::enterTextDisplayMode(bool text_flag)
     }
     
     if (!(display_mode & DISPLAY_MODE_TEXT)){
-        refreshSurface( effect_dst_surface, NULL, refresh_shadow_text_mode );
         dirty_rect.clear();
         dirty_rect.add( sentence_font_info.pos );
+        display_mode = DISPLAY_MODE_TEXT;
 
-        if (setEffect(&window_effect, false, true)) return;
+        if (setEffect(&window_effect)) return;
         while(doEffect(&window_effect, false));
 
-        display_mode = DISPLAY_MODE_TEXT;
         text_on_flag = true;
     }
 }
@@ -449,21 +526,19 @@ void ONScripter::leaveTextDisplayMode(bool force_leave_flag)
     if (display_mode & DISPLAY_MODE_TEXT &&
         (force_leave_flag || erase_text_window_mode != 0)){
 
-        SDL_BlitSurface(backup_surface, NULL, effect_dst_surface, NULL);
         dirty_rect.add(sentence_font_info.pos);
-            
-        if (setEffect(&window_effect, false, false)) return;
-        while(doEffect(&window_effect, false));
-
         display_mode = DISPLAY_MODE_NORMAL;
+            
+        if (setEffect(&window_effect)) return;
+        while(doEffect(&window_effect, false));
     }
 }
 
 bool ONScripter::doClickEnd()
 {
     bool ret = false;
-    
-    draw_cursor_flag = true;
+
+    refresh_shadow_text_mode |= REFRESH_CURSOR_MODE;
 
     if ( automode_flag ){
         event_mode =  WAIT_TEXT_MODE | WAIT_INPUT_MODE | WAIT_VOICE_MODE | WAIT_TIMER_MODE;
@@ -482,8 +557,10 @@ bool ONScripter::doClickEnd()
     }
 
     num_chars_in_sentence = 0;
-    draw_cursor_flag = false;
-
+    
+    refresh_shadow_text_mode &= ~REFRESH_CURSOR_MODE;
+    stopAnimation( clickstr_state );
+    
     return ret;
 }
 
@@ -492,8 +569,7 @@ bool ONScripter::clickWait( char *out_text )
     flush( REFRESH_NONE_MODE );
     skip_mode &= ~SKIP_TO_EOL;
 
-    if (script_h.checkClickstr(script_h.getStringBuffer() + string_buffer_offset) != 1) string_buffer_offset++;
-    string_buffer_offset++;
+    string_buffer_offset += script_h.checkClickstr(script_h.getStringBuffer() + string_buffer_offset);
 
     if ( (skip_mode & (SKIP_NORMAL | SKIP_TO_EOP) || ctrl_pressed_status) && !textgosub_label ){
         clickstr_state = CLICK_NONE;
@@ -518,13 +594,13 @@ bool ONScripter::clickWait( char *out_text )
                 script_h.getStringBuffer()[ string_buffer_offset ] == ' ') ||
                script_h.getStringBuffer()[ string_buffer_offset ] == '\t' ) string_buffer_offset ++;
 
-        if ( textgosub_label ){
+        if (textgosub_label){
             saveon_flag = false;
 
             textgosub_clickstr_state = CLICK_WAIT;
             if (script_h.getStringBuffer()[string_buffer_offset] == 0x0)
                 textgosub_clickstr_state |= CLICK_EOL;
-            gosubReal( textgosub_label, script_h.getWait(), true );
+            gosubReal(textgosub_label, script_h.getWait(), true);
 
             event_mode = IDLE_EVENT_MODE;
             waitEvent(0);
@@ -558,8 +634,7 @@ bool ONScripter::clickNewPage( char *out_text )
     flush( REFRESH_NONE_MODE );
     skip_mode &= ~SKIP_TO_EOL;
     
-    if (script_h.checkClickstr(script_h.getStringBuffer() + string_buffer_offset) != 1) string_buffer_offset++;
-    string_buffer_offset++;
+    string_buffer_offset += script_h.checkClickstr(script_h.getStringBuffer() + string_buffer_offset);
 
     if ( (skip_mode & SKIP_NORMAL || ctrl_pressed_status) && !textgosub_label  ){
         num_chars_in_sentence = 0;
@@ -573,11 +648,11 @@ bool ONScripter::clickNewPage( char *out_text )
                 script_h.getStringBuffer()[ string_buffer_offset ] == ' ') ||
                script_h.getStringBuffer()[ string_buffer_offset ] == '\t' ) string_buffer_offset ++;
 
-        if ( textgosub_label ){
+        if (textgosub_label){
             saveon_flag = false;
 
             textgosub_clickstr_state = CLICK_NEWPAGE;
-            gosubReal( textgosub_label, script_h.getWait(), true );
+            gosubReal(textgosub_label, script_h.getWait(), true);
 
             event_mode = IDLE_EVENT_MODE;
             waitEvent(0);
@@ -621,17 +696,19 @@ void ONScripter::startRuby(const char *buf, FontInfo &info)
         if ( *buf == '/' ){
             ruby_struct.stage = RubyStruct::RUBY;
             ruby_struct.ruby_start = buf+1;
+            buf++;
         }
         else if ( *buf == ')' || *buf == '\0' ){
             break;
         }
         else{
-            if ( ruby_struct.stage == RubyStruct::BODY )
-                ruby_struct.body_count++;
-            else if ( ruby_struct.stage == RubyStruct::RUBY )
-                ruby_struct.ruby_count++;
+            int n = script_h.enc.getBytes(*buf);
+            if (ruby_struct.stage == RubyStruct::BODY)
+                ruby_struct.body_count += (n == 1)?1:2;
+            else if (ruby_struct.stage == RubyStruct::RUBY)
+                ruby_struct.ruby_count += (n == 1)?1:2;
+            buf += n;
         }
-        buf++;
     }
     ruby_struct.ruby_end = buf;
     ruby_struct.stage = RubyStruct::BODY;
@@ -640,15 +717,18 @@ void ONScripter::startRuby(const char *buf, FontInfo &info)
 
 void ONScripter::endRuby(bool flush_flag, bool lookback_flag, SDL_Surface *surface, AnimationInfo *cache_info)
 {
-    char out_text[3]= {'\0', '\0', '\0'};
-    if ( sentence_font.rubyon_flag ){
+    char out_text[4]= {};
+    if (sentence_font.rubyon_flag){
         ruby_font.clear();
         const char *buf = ruby_struct.ruby_start;
-        while( buf < ruby_struct.ruby_end ){
-            out_text[0] = *buf;
-            out_text[1] = *(buf+1);
-            drawChar( out_text, &ruby_font, flush_flag, lookback_flag, surface, cache_info );
-            buf+=2;
+        while(buf < ruby_struct.ruby_end){
+            int n = 2;
+            if (script_h.enc.getEncoding() == Encoding::CODE_UTF8)
+                n = script_h.enc.getBytes(buf[0]);
+            for (int i=0; i<n; i++)
+                out_text[i] = buf[i];
+            drawChar(out_text, &ruby_font, flush_flag, lookback_flag, surface, cache_info);
+            buf += n;
         }
     }
     ruby_struct.stage = RubyStruct::NONE;
@@ -664,23 +744,25 @@ int ONScripter::textCommand()
     char *buf = script_h.getStringBuffer();
 
     bool tag_flag = true;
+    unsigned short unicode = script_h.enc.getUTF16("y", Encoding::CODE_CP932);
+    int n = script_h.enc.getBytes(buf[string_buffer_offset]);
     if (buf[string_buffer_offset] == '[')
         string_buffer_offset++;
-    else if (zenkakko_flag && 
-             buf[string_buffer_offset  ] == "y"[0] && 
-             buf[string_buffer_offset+1] == "y"[1])
-        string_buffer_offset += 2;
+    else if (zenkakko_flag &&
+             script_h.enc.getUTF16(buf + string_buffer_offset) == unicode)
+        string_buffer_offset += n;
     else
         tag_flag = false;
 
     int start_offset = string_buffer_offset;
     int end_offset = start_offset;
     while (tag_flag && buf[string_buffer_offset]){
-        if (zenkakko_flag && 
-            buf[string_buffer_offset  ] == "z"[0] && 
-            buf[string_buffer_offset+1] == "z"[1]){
+        unsigned short unicode = script_h.enc.getUTF16("z", Encoding::CODE_CP932);
+        int n = script_h.enc.getBytes(buf[string_buffer_offset]);
+        if (zenkakko_flag &&
+            script_h.enc.getUTF16(buf + string_buffer_offset) == unicode){
             end_offset = string_buffer_offset;
-            string_buffer_offset += 2;
+            string_buffer_offset += n;
             break;
         }
         else if (buf[string_buffer_offset] == ']'){
@@ -688,13 +770,12 @@ int ONScripter::textCommand()
             string_buffer_offset++;
             break;
         }
-        else if (IS_TWO_BYTE(buf[string_buffer_offset]))
-            string_buffer_offset += 2;
         else
-            string_buffer_offset++;
+            string_buffer_offset += n;
     }
 
-    if (pretextgosub_label && 
+    if (pretextgosub_label &&
+        !last_nest_info->pretextgosub_flag &&
         (!pagetag_flag || page_enter_status == 0) &&
         line_enter_status == 0){
 
@@ -711,7 +792,7 @@ int ONScripter::textCommand()
 
         saveon_flag = false;
         pretext_buf = script_h.getCurrent();
-        gosubReal( pretextgosub_label, script_h.getCurrent() );
+        gosubReal(pretextgosub_label, script_h.getCurrent(), false, true);
         line_enter_status = 1;
 
         return RET_CONTINUE;
@@ -727,7 +808,7 @@ int ONScripter::textCommand()
         processEOT();
     }
     else
-#endif    
+#endif
     while(processText());
 
     return RET_CONTINUE;
@@ -738,15 +819,20 @@ bool ONScripter::checkLineBreak(const char *buf, FontInfo *fi)
     if (!is_kinsoku) return false;
     
     // check start kinsoku
-    if (isStartKinsoku( buf+2 ) ||
-        (buf[2]=='_' && isStartKinsoku( buf+3 ))){
-        const char *buf2 = buf;
-        if (buf2[2] == '_') buf2++;
+    int n = script_h.enc.getBytes(buf[0]);
+    if (isStartKinsoku(buf+n) ||
+        (buf[n]=='_' && isStartKinsoku(buf+n+1))){
+        const char *buf2 = buf + n;
+        if (buf2[0] == '_') buf2++;
         int i = 2;
         while (!fi->isEndOfLine(i)){
-            if      ( buf2[i+2] == 0x0a || buf2[i+2] == 0 ) break;
-            else if ( !IS_TWO_BYTE( buf2[i+2] ) ) buf2++;
-            else if ( isStartKinsoku( buf2+i+2 ) ) i += 2;
+            n = script_h.enc.getBytes(buf2[0]);
+            if      (buf2[n] == 0x0a || buf2[n] == 0) break;
+            else if (script_h.enc.getBytes(buf2[n]) == 1) buf2++;
+            else if (isStartKinsoku(buf2 + n)){
+                i += 2;
+                buf2 += n;
+            }
             else break;
         }
 
@@ -754,13 +840,17 @@ bool ONScripter::checkLineBreak(const char *buf, FontInfo *fi)
     }
         
     // check end kinsoku
-    if (isEndKinsoku( buf )){
-        const char *buf2 = buf;
+    if (isEndKinsoku(buf)){
+        const char *buf2 = buf + n;
         int i = 2;
         while (!fi->isEndOfLine(i)){
-            if      ( buf2[i+2] == 0x0a || buf2[i+2] == 0 ) break;
-            else if ( !IS_TWO_BYTE( buf2[i+2] ) ) buf2++;
-            else if ( isEndKinsoku( buf2+i ) ) i += 2;
+            n = script_h.enc.getBytes(buf2[0]);
+            if      (buf2[n] == 0x0a || buf2[n] == 0) break;
+            else if (script_h.enc.getBytes(buf2[n]) == 1) buf2++;
+            else if (isEndKinsoku(buf2 + n)){
+                i += 2;
+                buf2 += n;
+            }
             else break;
         }
 
@@ -768,6 +858,30 @@ bool ONScripter::checkLineBreak(const char *buf, FontInfo *fi)
     }
 
     return false;
+}
+
+bool ONScripter::checkLigatureLineBreak(const char *buf, FontInfo *fi)
+{
+    if (script_h.current_language != 0) return false;
+
+    openFont(fi);
+    
+    int w = 0;
+    while (buf[0] != ' ' && buf[0] != 0x0a && buf[0] != 0 &&
+           buf[0] != script_h.enc.getTextMarker()){
+        int n = script_h.enc.getBytes(buf[0]);
+        unsigned short unicode = script_h.enc.getUTF16(buf);
+        
+        int minx, maxx, miny, maxy, advanced;
+        TTF_GlyphMetrics((TTF_Font*)fi->ttf_font[0], unicode,
+                         &minx, &maxx, &miny, &maxy, &advanced);
+        
+        w += advanced + fi->pitch_xy[0] - fi->font_size_xy[0];
+        buf += n;
+    }
+    w -= fi->pitch_xy[0] - fi->font_size_xy[0];
+
+    return fi->isEndOfLine(w * 2.0 / fi->pitch_xy[0]);
 }
 
 void ONScripter::processEOT()
@@ -789,7 +903,7 @@ void ONScripter::processEOT()
 bool ONScripter::processText()
 {
     //printf("textCommand %c %d %d %d\n", script_h.getStringBuffer()[ string_buffer_offset ], string_buffer_offset, event_mode, line_enter_status);
-    char out_text[3]= {'\0', '\0', '\0'};
+    char out_text[4]= {};
 
     //printf("*** textCommand %d (%d,%d)\n", string_buffer_offset, sentence_font.xy[0], sentence_font.xy[1]);
 
@@ -808,20 +922,28 @@ bool ONScripter::processText()
     new_line_skip_flag = false;
     
     char ch = script_h.getStringBuffer()[string_buffer_offset];
-    if ( IS_TWO_BYTE(ch) ){ // Shift jis
+    int n = script_h.enc.getBytes(ch);
+    if (n >= 2){
         /* ---------------------------------------- */
         /* Kinsoku process */
-        if ( checkLineBreak( script_h.getStringBuffer() + string_buffer_offset, &sentence_font ) ){
+        if (checkLineBreak(script_h.getStringBuffer() + string_buffer_offset, &sentence_font)){
             sentence_font.newLine();
             for (int i=0 ; i<indent_offset ; i++){
-                current_page->add(0x81);
-                current_page->add(0x40);
+                if (script_h.enc.getEncoding() == Encoding::CODE_CP932){
+                    current_page->add(0x81);
+                    current_page->add(0x40);
+                }
+                else{
+                    current_page->add(0xe3);
+                    current_page->add(0x80);
+                    current_page->add(0x80);
+                }
                 sentence_font.advanceCharInHankaku(2);
             }
         }
-        
-        out_text[0] = script_h.getStringBuffer()[string_buffer_offset];
-        out_text[1] = script_h.getStringBuffer()[string_buffer_offset+1];
+
+        for (int i=0; i<n; i++)
+            out_text[i] = script_h.getStringBuffer()[string_buffer_offset+i];
 
         if (script_h.checkClickstr(&script_h.getStringBuffer()[string_buffer_offset]) > 0){
             if (sentence_font.getRemainingLine() <= clickstr_line)
@@ -847,7 +969,7 @@ bool ONScripter::processText()
         }
         
         num_chars_in_sentence++;
-        string_buffer_offset += 2;
+        string_buffer_offset += n;
 
         return true;
     }
@@ -864,8 +986,8 @@ bool ONScripter::processText()
         if (matched_len > 0){
             out_text[0] = script_h.getStringBuffer()[string_buffer_offset];
             if (out_text[0] != '@' && out_text[0] != '\\'){
-                if (matched_len == 2)
-                    out_text[1] = script_h.getStringBuffer()[string_buffer_offset+1];
+                for (int i=1; i<matched_len; i++)
+                    out_text[i] = script_h.getStringBuffer()[string_buffer_offset+i];
                 bool flush_flag = true;
                 if ( skip_mode || ctrl_pressed_status ) flush_flag = false;
                 drawChar( out_text, &sentence_font, flush_flag, true, accumulation_surface, &text_info );
@@ -916,7 +1038,7 @@ bool ONScripter::processText()
         }
         return true;
     }
-    else if ( ch == '#' && !(script_h.getEndStatus() & ScriptHandler::END_1BYTE_CHAR) ){
+    else if (ch == '#'){
         readColor( &sentence_font.color, script_h.getStringBuffer() + string_buffer_offset );
         readColor( &ruby_font.color, script_h.getStringBuffer() + string_buffer_offset );
         string_buffer_offset += 7;
@@ -984,6 +1106,40 @@ bool ONScripter::processText()
         in_textbtn_flag = false;
         return true;
     }
+    else if (script_h.enc.getEncoding() == Encoding::CODE_UTF8 &&
+             ch == script_h.enc.getTextMarker()){
+        int status = script_h.getEndStatus();
+        if (status & ScriptHandler::END_1BYTE_CHAR)
+            script_h.setEndStatus(status & ~ScriptHandler::END_1BYTE_CHAR, true);
+        else
+            script_h.setEndStatus(ScriptHandler::END_1BYTE_CHAR);
+        string_buffer_offset++;
+        
+        return true;
+    }
+    else if (script_h.enc.getEncoding() == Encoding::CODE_UTF8 &&
+             ch == '~'){
+        current_page->add('~');
+        while(1){
+            ch = script_h.getStringBuffer()[++string_buffer_offset];
+            if (ch == 0x0a || ch == 0) break;
+            current_page->add(ch);
+            if (ch == '~'){
+                string_buffer_offset++;
+                break;
+            }
+            if (ch == 'i'){
+                openFont(&sentence_font);
+                sentence_font.toggleStyle(TTF_STYLE_ITALIC);
+            }
+            else if (ch == 'b'){
+                openFont(&sentence_font);
+                sentence_font.toggleStyle(TTF_STYLE_BOLD);
+            }
+        }
+        
+        return true;
+    }
     else{
         out_text[0] = ch;
         
@@ -1024,14 +1180,18 @@ bool ONScripter::processText()
         bool flush_flag = true;
         if ( skip_mode || ctrl_pressed_status )
             flush_flag = false;
-        if ( script_h.getStringBuffer()[ string_buffer_offset + 1 ] &&
-             !(script_h.getEndStatus() & ScriptHandler::END_1BYTE_CHAR)){
+        if (script_h.getStringBuffer()[ string_buffer_offset + 1 ] &&
+            !(script_h.getEndStatus() & ScriptHandler::END_1BYTE_CHAR) &&
+            script_h.enc.getEncoding() == Encoding::CODE_CP932){
             out_text[1] = script_h.getStringBuffer()[ string_buffer_offset + 1 ];
-            drawChar( out_text, &sentence_font, flush_flag, true, accumulation_surface, &text_info );
+            drawChar(out_text, &sentence_font, flush_flag, true, accumulation_surface, &text_info);
             num_chars_in_sentence++;
         }
-        else if (script_h.getEndStatus() & ScriptHandler::END_1BYTE_CHAR){
-            drawChar( out_text, &sentence_font, flush_flag, true, accumulation_surface, &text_info );
+        else if (script_h.getEndStatus() & ScriptHandler::END_1BYTE_CHAR ||
+                 script_h.enc.getEncoding() == Encoding::CODE_UTF8){
+            if (checkLigatureLineBreak(script_h.getStringBuffer() + string_buffer_offset, &sentence_font))
+                sentence_font.newLine();
+            drawChar(out_text, &sentence_font, flush_flag, true, accumulation_surface, &text_info);
             num_chars_in_sentence++;
         }
         
@@ -1043,8 +1203,9 @@ bool ONScripter::processText()
                 waitEvent( sentence_font.wait_time );
         }
 
-        if ( script_h.getStringBuffer()[ string_buffer_offset + 1 ] &&
-             !(script_h.getEndStatus() & ScriptHandler::END_1BYTE_CHAR))
+        if (script_h.getStringBuffer()[ string_buffer_offset + 1 ] &&
+            !(script_h.getEndStatus() & ScriptHandler::END_1BYTE_CHAR) &&
+            script_h.enc.getEncoding() == Encoding::CODE_CP932)
             string_buffer_offset++;
         string_buffer_offset++;
 

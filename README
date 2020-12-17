@@ -7,9 +7,9 @@ ONScripter
 
 1. 動作環境
 
-	libjpeg 6b, bzip2-1.0.5, SDL-1.2.14, SDL_image-1.2.10, SDL_mixer-1.2.8, SDL_ttf-2.0.9, 及び SMPEG-0.4.5 が動作する環境です。
-	Linux 2.6.32 + Xvnc4 + g++ (gcc 4.4.4) で開発しています。
-	Linux, Windows Vista (Visual Studio 2008 C++), Android (HTC Desire), iPad2 上で動作確認をしています。
+	libjpeg 6b, bzip2-1.0.6, SDL-1.2.15, SDL_image-1.2.12, SDL_mixer-1.2.12, SDL_ttf-2.0.11, 及び SMPEG-0.4.5 が動作する環境です。
+	Linux 4.9.6 + Xvnc4 + g++ (gcc 6.3.0) で開発しています。
+	Linux, Windows 8 (Visual Studio 2017 C++), Xperia (Android 8.0.0), iPad2 Air (iOS 12.1) 上で動作確認をしています。
 	その他、MacOS X, MacOS 9, Android(Nexus One, Emulator), iPhone, iPad, PSP, FreeBSD, Solaris(on SPARC), Tru64 UNIX, OS/Warp, iPod, PocketPC, Playstation3, Wii, GP2X, NetWalker, Dreamcast 上での動作報告をいただいています。
 
 
@@ -24,8 +24,8 @@ ONScripter
 	$ onscripter
 
 	Windows の場合 (DOS プロンプトで)
-	$ libjpeg 6b, bzip2, SDL と SMPEG のインストール場所に合わせて Makefile.Win を修正
-	$ nmake -f Makefile.Win
+	$ https://onscripter.osdn.jp/win/ を参考に SDL, SDL_image, SDL_mixer, SDL_ttf, smpeg, Lua, bzip2 をインストールしてください。
+	$ ONScripter.sln を Visual Studio で開いてビルドしてください。
 	$ onscripter.exe
 
 	MacOS X の場合

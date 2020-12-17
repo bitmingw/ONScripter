@@ -2,7 +2,7 @@
  * 
  *  ONScripter_animation.cpp - Methods to manipulate AnimationInfo
  *
- *  Copyright (c) 2001-2016 Ogapee. All rights reserved.
+ *  Copyright (c) 2001-2020 Ogapee. All rights reserved.
  *
  *  ogapee@aqua.dti2.ne.jp
  *
@@ -48,10 +48,8 @@ int ONScripter::calcDurationToNextAnimation()
 
     if (!textgosub_label &&
          (clickstr_state == CLICK_WAIT || clickstr_state == CLICK_NEWPAGE)){
-        AnimationInfo *anim;
-        if      (clickstr_state == CLICK_WAIT)
-            anim = &cursor_info[0];
-        else if (clickstr_state == CLICK_NEWPAGE)
+        AnimationInfo *anim = &cursor_info[0]; // CLICK_WAIT
+        if (clickstr_state == CLICK_NEWPAGE)
             anim = &cursor_info[1];
 
         if (anim->visible && anim->is_animatable){
@@ -74,45 +72,48 @@ void ONScripter::proceedAnimation(int current_time)
 {
     for (int i=0 ; i<3 ; i++)
         if (tachi_info[i].proceedAnimation(current_time))
-            flushDirect(tachi_info[i].pos, refreshMode() | (draw_cursor_flag?REFRESH_CURSOR_MODE:0));
+            flushDirect(tachi_info[i].pos, refreshMode());
         
     for (int i=MAX_SPRITE_NUM-1 ; i>=0 ; i--)
         if (sprite_info[i].proceedAnimation(current_time))
-            flushDirect(sprite_info[i].pos, refreshMode() | (draw_cursor_flag?REFRESH_CURSOR_MODE:0));
+            flushDirect(sprite_info[i].pos, refreshMode());
 
 #ifdef USE_LUA
     if (lua_handler.is_animatable && !script_h.isExternalScript()){
-        while(lua_handler.next_time <= current_time){
-            int tmp_event_mode = event_mode;
-            int tmp_next_time = next_time;
-            int tmp_string_buffer_offset = string_buffer_offset;
+        int tmp_event_mode = event_mode;
+        int tmp_next_time = next_time;
+        int tmp_string_buffer_offset = string_buffer_offset;
 
-            char *current = script_h.getCurrent();
+        char *current = script_h.getCurrent();
+        while (lua_handler.next_time <= current_time){
             if (lua_handler.isCallbackEnabled(LUAHandler::LUA_ANIMATION))
                 if (lua_handler.callFunction(true, "animation"))
                     errorAndExit( lua_handler.error_str );
-            script_h.setCurrent(current);
-            readToken();
-
-            string_buffer_offset = tmp_string_buffer_offset;
-            next_time = tmp_next_time;
-            event_mode = tmp_event_mode;
-
-            lua_handler.next_time += lua_handler.duration_time;
+                
             if (lua_handler.duration_time <= 0){
                 lua_handler.next_time = current_time;
                 break;
             }
+            
+            // exit the loop not to decrease the performance
+            do{
+                lua_handler.next_time += lua_handler.duration_time;
+            }
+            while (lua_handler.next_time <= current_time);
         }
+        script_h.setCurrent(current);
+        readToken();
+
+        string_buffer_offset = tmp_string_buffer_offset;
+        next_time = tmp_next_time;
+        event_mode = tmp_event_mode;
     }
 #endif
 
     if (!textgosub_label &&
         (clickstr_state == CLICK_WAIT || clickstr_state == CLICK_NEWPAGE)){
-        AnimationInfo *anim;
-        if (clickstr_state == CLICK_WAIT)
-            anim = &cursor_info[0];
-        else if (clickstr_state == CLICK_NEWPAGE)
+        AnimationInfo *anim = &cursor_info[0]; // CLICK_WAIT
+        if (clickstr_state == CLICK_NEWPAGE)
             anim = &cursor_info[1];
         
         if (anim->proceedAnimation(current_time)){
@@ -121,7 +122,7 @@ void ONScripter::proceedAnimation(int current_time)
                 dst_rect.x += sentence_font.x() * screen_ratio1 / screen_ratio2;
                 dst_rect.y += sentence_font.y() * screen_ratio1 / screen_ratio2;
             }
-            flushDirect( dst_rect, refreshMode() | (draw_cursor_flag?REFRESH_CURSOR_MODE:0) );
+            flushDirect( dst_rect, refreshMode());
         }
     }
 }
@@ -132,7 +133,7 @@ void ONScripter::setupAnimationInfo( AnimationInfo *anim, FontInfo *info )
         anim->file_name && anim->surface_name &&
         strcmp(anim->file_name, anim->surface_name) == 0 &&
         ((!anim->mask_file_name && !anim->mask_surface_name) ||
-         (anim->mask_file_name && !anim->mask_surface_name &&
+         (anim->mask_file_name && anim->mask_surface_name &&
           strcmp(anim->mask_file_name, anim->mask_surface_name) == 0))) return;
 
     anim->deleteSurface();
@@ -149,23 +150,31 @@ void ONScripter::setupAnimationInfo( AnimationInfo *anim, FontInfo *info )
     if ( anim->trans_mode == AnimationInfo::TRANS_STRING ){
         FontInfo f_info = sentence_font;
         if (info) f_info = *info;
+        f_info.enc = &script_h.enc;
         f_info.rubyon_flag = anim->is_ruby_drawable;
 
         if ( anim->font_size_xy[0] >= 0 ){ // in case of Sprite, not rclick menu
             f_info.setTateyokoMode(0);
             f_info.top_xy[0] = anim->orig_pos.x;
             f_info.top_xy[1] = anim->orig_pos.y;
-            if (anim->is_single_line)
-                f_info.setLineArea( strlen(anim->file_name)/2+1 );
-            f_info.clear();
             
-            f_info.font_size_xy[0] = anim->font_size_xy[0];
-            f_info.font_size_xy[1] = anim->font_size_xy[1];
-            f_info.pitch_xy[0] = anim->font_pitch[0];
-            f_info.pitch_xy[1] = anim->font_pitch[1];
+            if (anim->font_pitch[0] >= 0){
+                f_info.font_size_xy[0] = anim->font_size_xy[0];
+                f_info.pitch_xy[0] = anim->font_pitch[0];
+            }
+            if (anim->font_pitch[1] >= 0){
+                f_info.font_size_xy[1] = anim->font_size_xy[1];
+                f_info.pitch_xy[1] = anim->font_pitch[1];
+            }
 
             f_info.ttf_font[0] = NULL;
             f_info.ttf_font[1] = NULL;
+            
+            if (anim->is_single_line){
+                openFont(&f_info);
+                f_info.setLineArea(anim->file_name);
+            }
+            f_info.clear();
         }
 
         if (f_info.ttf_font[0] == NULL)
@@ -209,23 +218,37 @@ void ONScripter::setupAnimationInfo( AnimationInfo *anim, FontInfo *info )
     else{
         bool has_alpha;
         int location;
-        SDL_Surface *surface = loadImage( anim->file_name, &has_alpha, &location, &anim->default_alpha );
+        SDL_Surface *surface = loadImage(anim->file_name, anim->is_flipped, &has_alpha, &location, &anim->default_alpha);
+
+        if (script_h.enc.getEncoding() == Encoding::CODE_UTF8 && has_alpha)
+            anim->trans_mode = AnimationInfo::TRANS_ALPHA;
 
         SDL_Surface *surface_m = NULL;
         if (anim->trans_mode == AnimationInfo::TRANS_MASK)
-            surface_m = loadImage( anim->mask_file_name );
+            surface_m = loadImage(anim->mask_file_name, anim->is_flipped);
         
         surface = anim->setupImageAlpha(surface, surface_m, has_alpha);
 
         if (surface &&
-            screen_ratio2 != screen_ratio1 &&
+            ((screen_ratio2 != screen_ratio1) ||
+             (script_h.screen_width == 640 && anim->is_2x)) &&
             (!disable_rescale_flag || location == BaseReader::ARCHIVE_TYPE_NONE))
         {
             SDL_Surface *src_s = surface;
 
-            int w, h;
-            if ( (w = src_s->w * screen_ratio1 / screen_ratio2) == 0 ) w = 1;
-            if ( (h = src_s->h * screen_ratio1 / screen_ratio2) == 0 ) h = 1;
+            int w = src_s->w * screen_ratio1 / screen_ratio2;
+            int h = src_s->h * screen_ratio1 / screen_ratio2;
+            if (script_h.screen_width == 640 && anim->is_2x){
+                // workaround to deal with hard-coded 2x mode
+                w /= 2;
+                h /= 2;
+                anim->orig_pos.w /= 2;
+                anim->orig_pos.h /= 2;
+                if (anim->orig_pos.w == 0) anim->orig_pos.w = 1;
+                if (anim->orig_pos.h == 0) anim->orig_pos.h = 1;
+            }
+            if (w == 0) w = 1;
+            if (h == 0) h = 1;
             SDL_PixelFormat *fmt = image_surface->format;
             surface = SDL_CreateRGBSurface( SDL_SWSURFACE, w, h,
                                             fmt->BitsPerPixel, fmt->Rmask, fmt->Gmask, fmt->Bmask, fmt->Amask );
@@ -250,8 +273,20 @@ void ONScripter::parseTaggedString( AnimationInfo *anim )
     anim->num_of_cells = 1;
     anim->trans_mode = trans_mode;
 
+    anim->is_2x = false;
+    anim->is_flipped = false;
     if ( buffer[0] == ':' ){
         while (*++buffer == ' ');
+        
+        if (buffer[0] == 'b'){
+            anim->is_2x = true;
+            buffer++;
+        }
+        
+        if (buffer[0] == 'f'){
+            anim->is_flipped = true;
+            buffer++;
+        }
         
         if ( buffer[0] == 'a' ){
             anim->trans_mode = AnimationInfo::TRANS_ALPHA;
@@ -281,7 +316,7 @@ void ONScripter::parseTaggedString( AnimationInfo *anim )
                 anim->font_size_xy[0] = script_h.readInt();
                 anim->font_size_xy[1] = script_h.readInt();
                 anim->font_pitch[0] = anim->font_size_xy[0];
-                anim->font_pitch[1] = anim->font_size_xy[0]; // dummy
+                anim->font_pitch[1] = anim->font_size_xy[1];
                 if ( script_h.getEndStatus() & ScriptHandler::END_COMMA ){
                     anim->font_pitch[0] += script_h.readInt();
                     if ( script_h.getEndStatus() & ScriptHandler::END_COMMA ){
@@ -393,9 +428,9 @@ void ONScripter::drawTaggedSurface( SDL_Surface *dst_surface, AnimationInfo *ani
     }
 
     if (!anim->affine_flag)
-        anim->blendOnSurface( dst_surface, poly_rect.x, poly_rect.y, clip, anim->trans );
+        anim->blendOnSurface( dst_surface, poly_rect.x, poly_rect.y, clip, layer_alpha_buf, anim->trans );
     else
-        anim->blendOnSurface2( dst_surface, poly_rect.x, poly_rect.y, clip, anim->trans );
+        anim->blendOnSurface2( dst_surface, poly_rect.x, poly_rect.y, clip, layer_alpha_buf, anim->trans );
 }
 
 void ONScripter::stopAnimation( int click )

@@ -2,7 +2,7 @@
  *
  *  ScriptParser_command.cpp - Define command executer of ONScripter
  *
- *  Copyright (c) 2001-2016 Ogapee. All rights reserved.
+ *  Copyright (c) 2001-2020 Ogapee. All rights reserved.
  *
  *  ogapee@aqua.dti2.ne.jp
  *
@@ -137,7 +137,6 @@ int ScriptParser::textgosubCommand()
         errorAndExit( "textgosub: not in the define section" );
 
     setStr( &textgosub_label, script_h.readStr()+1 );
-    script_h.enableTextgosub(true);
     
     return RET_CONTINUE;
 }
@@ -390,8 +389,9 @@ int ScriptParser::rmenuCommand()
 
         const char *buf = script_h.readStr();
         setStr( &link->next->label, buf );
-        if ( rmenu_link_width < strlen( buf )/2 + 1 )
-            rmenu_link_width = strlen( buf )/2 + 1;
+        int n = script_h.enc.getNum((const unsigned char*)buf);
+        if (rmenu_link_width < n/2 + 1)
+            rmenu_link_width = n/2 + 1;
 
         link->next->system_call_no = getSystemCallNo( script_h.readLabel() );
 
@@ -621,16 +621,27 @@ int ScriptParser::midCommand()
     unsigned int len   = script_h.readInt();
 
     ScriptHandler::VariableData &vd = script_h.getVariableData(no);
-    if ( vd.str ) delete[] vd.str;
-    if ( start >= strlen(save_buf) ){
+    if (vd.str) delete[] vd.str;
+    if (start >= strlen(save_buf)){
         vd.str = NULL;
     }
     else{
-        if ( start+len > strlen(save_buf ) )
-            len = strlen(save_buf) - start;
-        vd.str = new char[len+1];
-        memcpy( vd.str, save_buf+start, len );
-        vd.str[len] = '\0';
+        unsigned int len2 = 0;
+        if (script_h.enc.getEncoding() == Encoding::CODE_UTF8){
+            for (unsigned int i=0; i<start; i++)
+                save_buf += script_h.enc.getBytes(*save_buf);
+            for (unsigned int i=0; i<len; i++)
+                len2 += script_h.enc.getBytes(save_buf[len2]);
+        }
+        else{
+            save_buf += start;
+            len2 = len;
+        }
+        if (len2 > strlen(save_buf))
+            len2 = strlen(save_buf);
+        vd.str = new char[len2+1];
+        memcpy(vd.str, save_buf, len2);
+        vd.str[len2] = '\0';
     }
 
     return RET_CONTINUE;
@@ -816,7 +827,7 @@ int ScriptParser::itoaCommand()
 {
     bool itoa2_flag = false;
 
-    if ( script_h.isName( "itoa2" ) )
+    if (script_h.isName("itoa2") && script_h.enc.getEncoding() != Encoding::CODE_UTF8)
         itoa2_flag = true;
     
     script_h.readVariable();
@@ -826,12 +837,12 @@ int ScriptParser::itoaCommand()
 
     int val = script_h.readInt();
 
-    char val_str[20];
+    char val_str[30];
     if (itoa2_flag)
         script_h.getStringFromInteger(val_str, val, -1);
     else
-        sprintf( val_str, "%d", val );
-    setStr( &script_h.getVariableData(no).str, val_str );
+        sprintf(val_str, "%d", val);
+    setStr(&script_h.getVariableData(no).str, val_str);
     
     return RET_CONTINUE;
 }
@@ -991,7 +1002,7 @@ int ScriptParser::gotoCommand()
     return RET_CONTINUE;
 }
 
-void ScriptParser::gosubReal( const char *label, char *next_script, bool textgosub_flag )
+void ScriptParser::gosubReal( const char *label, char *next_script, bool textgosub_flag, bool pretextgosub_flag )
 {
     last_nest_info->next = new NestInfo();
     last_nest_info->next->previous = last_nest_info;
@@ -999,6 +1010,7 @@ void ScriptParser::gosubReal( const char *label, char *next_script, bool textgos
     last_nest_info = last_nest_info->next;
     last_nest_info->next_script = next_script;
     last_nest_info->textgosub_flag = textgosub_flag;
+    last_nest_info->pretextgosub_flag = pretextgosub_flag;
 
     setCurrentLabel( label );
 }

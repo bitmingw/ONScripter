@@ -2,7 +2,7 @@
  * 
  *  ONScripter.h - Execution block parser of ONScripter
  *
- *  Copyright (c) 2001-2016 Ogapee. All rights reserved.
+ *  Copyright (c) 2001-2020 Ogapee. All rights reserved.
  *
  *  ogapee@aqua.dti2.ne.jp
  *
@@ -145,6 +145,8 @@ public:
     int spclclkCommand();
     int spbtnCommand();
     int skipoffCommand();
+    int showlangjpCommand();
+    int showlangenCommand();
     int sevolCommand();
     int setwindow3Command();
     int setwindow2Command();
@@ -201,6 +203,8 @@ public:
     int loadgameCommand();
     int ldCommand();
     int layermessageCommand();
+    int langjpCommand();
+    int langenCommand();
     int kinsokuCommand();
     int jumpfCommand();
     int jumpbCommand();
@@ -227,6 +231,7 @@ public:
     int getsavestrCommand();
     int getretCommand();
     int getregCommand();
+    int getreadlangCommand();
     int getpageupCommand();
     int getpageCommand();
     int getmp3volCommand();
@@ -305,6 +310,7 @@ public:
     void NSDSetSpriteCommand(int spnum, int texnum, const char *tag);
 
     void stopSMPEG();
+    void updateEffect();
     
 private:
     // ----------------------------------------
@@ -461,8 +467,11 @@ private:
     int  effect_timer_resolution;
     int  effect_start_time;
     int  effect_start_time_old;
+    volatile bool update_effect;
     
-    bool setEffect( EffectLink *effect, bool generate_effect_dst, bool update_backup_surface );
+    void generateEffectSrc(bool update);
+    void generateEffectDst(int effect_no);
+    bool setEffect( EffectLink *effect );
     bool doEffect( EffectLink *effect, bool clear_dirty_region=true );
     void drawEffect( SDL_Rect *dst_rect, SDL_Rect *src_rect, SDL_Surface *surface );
     void generateMosaic( SDL_Surface *src_surface, int level );
@@ -480,6 +489,7 @@ private:
     void buildBreakupMask();
     void initBreakup( char *params );
     void effectBreakup( char *params, int duration );
+    void effectCascade( char *params, int duration );
 
     // ----------------------------------------
     // variables and methods relevant to event
@@ -560,8 +570,8 @@ private:
     SDL_Surface *accumulation_surface; // Final image, i.e. picture_surface (+ shadow + text_surface)
     SDL_Surface *backup_surface; // Final image w/o (shadow + text_surface) used in leaveTextDisplayMode()
     SDL_Surface *screen_surface; // Text + Select_image + Tachi image + background
-    SDL_Surface *effect_dst_surface; // Intermediate source buffer for effect
-    SDL_Surface *effect_src_surface; // Intermediate destnation buffer for effect
+    SDL_Surface *effect_src_surface; // Intermediate source buffer for effect
+    SDL_Surface *effect_dst_surface; // Intermediate destination buffer for effect
     SDL_Surface *screenshot_surface; // Screenshot
     int screenshot_w, screenshot_h;
     SDL_Surface *image_surface; // Reference for loadImage()
@@ -574,7 +584,7 @@ private:
     unsigned char *resize_buffer;
     size_t resize_buffer_size;
 
-    SDL_Surface *loadImage(char *filename, bool *has_alpha=NULL, int *location=NULL, unsigned char *alpha=NULL);
+    SDL_Surface *loadImage(char *filename, bool is_flipped, bool *has_alpha=NULL, int *location=NULL, unsigned char *alpha=NULL);
     SDL_Surface *createRectangleSurface(char *filename, bool *has_alpha, unsigned char *alpha=NULL);
     SDL_Surface *createSurfaceFromFile(char *filename,bool *has_alpha, int *location);
 
@@ -596,7 +606,7 @@ private:
 
     int  shelter_event_mode;
     int  shelter_display_mode;
-    bool shelter_draw_cursor_flag;
+    int  shelter_refresh_shadow_text_mode;
     Page *cached_page;
     ButtonLink *shelter_button_link;
     SelectLink *shelter_select_link;
@@ -670,6 +680,8 @@ private:
     unsigned char *layer_smpeg_buffer;
     bool layer_smpeg_loop_flag;
     AnimationInfo *smpeg_info;
+    AnimationInfo effect_src_info;
+    unsigned char *layer_alpha_buf; // alpha component of (movie) layer
 #if defined(USE_SMPEG)
     SMPEG* layer_smpeg_sample;
     SMPEG_Filter layer_smpeg_filter;
@@ -680,7 +692,7 @@ private:
     int playWave(Mix_Chunk *chunk, int format, bool loop_flag, int channel);
     int playMIDI(bool loop_flag);
     
-    int playMPEG(const char *filename, bool click_flag, bool loop_flag=false);
+    int playMPEG(const char *filename, bool click_flag, bool loop_flag=false, bool nosound_flag=false);
     int playAVI( const char *filename, bool click_flag );
     enum { WAVE_PLAY        = 0,
            WAVE_PRELOAD     = 1,
@@ -730,14 +742,14 @@ private:
     char *font_file;
     int erase_text_window_mode;
     bool text_on_flag; // suppress the effect of erase_text_window_mode
-    bool draw_cursor_flag;
     int  indent_offset;
 
     void setwindowCore();
     
     void shiftHalfPixelX(SDL_Surface *surface);
     void shiftHalfPixelY(SDL_Surface *surface);
-    void drawGlyph( SDL_Surface *dst_surface, FontInfo *info, SDL_Color &color, char *text, int xy[2], AnimationInfo *cache_info, SDL_Rect *clip, SDL_Rect &dst_rect );
+    int  drawGlyph( SDL_Surface *dst_surface, FontInfo *info, SDL_Color &color, char *text, int xy[2], AnimationInfo *cache_info, SDL_Rect *clip, SDL_Rect &dst_rect );
+    void openFont(FontInfo *fi);
     void drawChar( char* text, FontInfo *info, bool flush_flag, bool lookback_flag, SDL_Surface *surface, AnimationInfo *cache_info, SDL_Rect *clip=NULL );
     void drawString( const char *str, uchar3 color, FontInfo *info, bool flush_flag, SDL_Surface *surface, SDL_Rect *rect = NULL, AnimationInfo *cache_info=NULL, bool pack_hankaku=true );
     void restoreTextBuffer(SDL_Surface *surface = NULL);
@@ -750,6 +762,7 @@ private:
     void endRuby(bool flush_flag, bool lookback_flag, SDL_Surface *surface, AnimationInfo *cache_info);
     int  textCommand();
     bool checkLineBreak(const char *buf, FontInfo *fi);
+    bool checkLigatureLineBreak(const char *buf, FontInfo *fi);
     void processEOT();
     bool processText();
 };

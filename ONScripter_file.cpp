@@ -2,7 +2,7 @@
  *
  *  ONScripter_file.cpp - FILE I/O of ONScripter
  *
- *  Copyright (c) 2001-2016 Ogapee. All rights reserved.
+ *  Copyright (c) 2001-2018 Ogapee. All rights reserved.
  *
  *  ogapee@aqua.dti2.ne.jp
  *
@@ -30,6 +30,7 @@
 #include <time.h>
 #elif defined(WIN32)
 #include <windows.h>
+extern "C" { FILE __iob_func[3] = { *stdin,*stdout,*stderr }; }
 #elif defined(MACOS9)
 #include <DateTimeUtils.h>
 #include <Files.h>
@@ -70,15 +71,10 @@ void ONScripter::searchSaveFile( SaveFileInfo &save_file_info, int no )
     FILETIME    tm, ltm;
     SYSTEMTIME  stm;
 
-#if defined(WINCE)
     WCHAR file_nameW[256];
     MultiByteToWideChar(CP_ACP, 0, file_name, -1, file_nameW, 256);
     handle = CreateFile( file_nameW, GENERIC_READ, 0, NULL,
                          OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL );
-#else
-    handle = CreateFile( file_name, GENERIC_READ, 0, NULL,
-                         OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL );
-#endif
     if ( handle == INVALID_HANDLE_VALUE ){
         save_file_info.valid = false;
         return;

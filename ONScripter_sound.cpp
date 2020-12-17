@@ -2,7 +2,7 @@
  * 
  *  ONScripter_sound.cpp - Methods for playing sound
  *
- *  Copyright (c) 2001-2016 Ogapee. All rights reserved.
+ *  Copyright (c) 2001-2020 Ogapee. All rights reserved.
  *
  *  ogapee@aqua.dti2.ne.jp
  *
@@ -196,12 +196,13 @@ int ONScripter::playMIDI(bool loop_flag)
     return 0;
 }
 
-#if defined(USE_SMPEG) && defined(USE_SDL_RENDERER)
+#if defined(USE_SMPEG)
+#if defined(USE_SDL_RENDERER)
 struct OverlayInfo{
     SDL_Overlay overlay;
     SDL_mutex *mutex;
 };
-static void smpeg_filter_callback( SDL_Overlay * dst, SDL_Overlay * src, SDL_Rect * region, SMPEG_FilterInfo * filter_info, void * data )
+static void smpeg_filter_callback(SDL_Overlay * dst, SDL_Overlay * src, SDL_Rect * region, SMPEG_FilterInfo * filter_info, void * data)
 {
     if (dst){
         dst->w = 0;
@@ -215,24 +216,34 @@ static void smpeg_filter_callback( SDL_Overlay * dst, SDL_Overlay * src, SDL_Rec
            oi->overlay.w*oi->overlay.h + (oi->overlay.w/2)*(oi->overlay.h/2)*2);
     SDL_mutexV(oi->mutex);
 }
+static void smpeg_filter_destroy(struct SMPEG_Filter * filter)
+{
+}
+#elif defined(ANDROID)
+static void smpeg_filter_callback(SDL_Overlay * dst, SDL_Overlay * src, SDL_Rect * region, SMPEG_FilterInfo * filter_info, void * data)
+{
+    if (dst){
+        dst->w = 0;
+        dst->h = 0;
+    }
 
-static void smpeg_filter_destroy( struct SMPEG_Filter * filter )
+    ONScripter *ons = (ONScripter*)data;
+    AnimationInfo *ai = ons->getSMPEGInfo();
+    ai->convertFromYUV(src);
+}
+static void smpeg_filter_destroy(struct SMPEG_Filter * filter)
 {
 }
 #endif
+#endif
 
-int ONScripter::playMPEG(const char *filename, bool click_flag, bool loop_flag)
+int ONScripter::playMPEG(const char *filename, bool click_flag, bool loop_flag, bool nosound_flag)
 {
     unsigned long length = script_h.cBR->getFileLength( filename );
     if (length == 0){
         fprintf( stderr, " *** can't find file [%s] ***\n", filename );
         return 0;
     }
-
-#ifdef ANDROID
-    playVideoAndroid(filename);
-    return 0;
-#endif
 
 #ifdef IOS
     char *absolute_filename = new char[ strlen(archive_path) + strlen(filename) + 1 ];
@@ -248,13 +259,22 @@ int ONScripter::playMPEG(const char *filename, bool click_flag, bool loop_flag)
     script_h.cBR->getFile( filename, layer_smpeg_buffer );
     SMPEG_Info info;
     layer_smpeg_sample = SMPEG_new_rwops( SDL_RWFromMem( layer_smpeg_buffer, length ), &info, 0 );
-    if (SMPEG_error( layer_smpeg_sample )){
+    unsigned char packet_code[4] = {0x00, 0x00, 0x01, 0xba};
+    if (SMPEG_error( layer_smpeg_sample ) ||
+        layer_smpeg_buffer[0] != packet_code[0] ||
+        layer_smpeg_buffer[1] != packet_code[1] ||
+        layer_smpeg_buffer[2] != packet_code[2] ||
+        layer_smpeg_buffer[3] != packet_code[3] ||
+        (layer_smpeg_buffer[4] & 0xf0) != 0x20){
         stopSMPEG();
+#ifdef ANDROID
+        playVideoAndroid(filename);
+#endif
         return ret;
     }
 
     SMPEG_enableaudio( layer_smpeg_sample, 0 );
-    if (audio_open_flag){
+    if (audio_open_flag && !nosound_flag){
         int mpegversion, frequency, layer, bitrate;
         char mode[10];
         sscanf(info.audio_string,
@@ -271,7 +291,7 @@ int ONScripter::playMPEG(const char *filename, bool click_flag, bool loop_flag)
     SMPEG_enablevideo( layer_smpeg_sample, 1 );
     
 #if defined(USE_SDL_RENDERER)
-    SMPEG_setdisplay( layer_smpeg_sample, accumulation_surface, NULL,  NULL );
+    SMPEG_setdisplay(layer_smpeg_sample, accumulation_surface, NULL,  NULL);
 
     OverlayInfo oi;
     Uint16 pitches[3];
@@ -296,18 +316,29 @@ int ONScripter::playMPEG(const char *filename, bool click_flag, bool loop_flag)
     layer_smpeg_filter.data = &oi;
     layer_smpeg_filter.callback = smpeg_filter_callback;
     layer_smpeg_filter.destroy = smpeg_filter_destroy;
-    SMPEG_filter( layer_smpeg_sample, &layer_smpeg_filter );
+    SMPEG_filter(layer_smpeg_sample, &layer_smpeg_filter);
+#elif defined(ANDROID)
+    SMPEG_setdisplay(layer_smpeg_sample, screen_surface, NULL,  NULL);
+    AnimationInfo *smpeg_info_back = smpeg_info;
+    smpeg_info = new AnimationInfo();
+    smpeg_info->image_surface = accumulation_surface;
+    layer_smpeg_filter.data = this;
+    layer_smpeg_filter.callback = smpeg_filter_callback;
+    layer_smpeg_filter.destroy = smpeg_filter_destroy;
+    SMPEG_filter(layer_smpeg_sample, &layer_smpeg_filter);
 #else
-    SMPEG_setdisplay( layer_smpeg_sample, screen_surface, NULL,  NULL );
+    SMPEG_setdisplay(layer_smpeg_sample, screen_surface, NULL,  NULL);
 #endif
-    SMPEG_setvolume( layer_smpeg_sample, music_volume );
-    SMPEG_loop( layer_smpeg_sample, loop_flag?1:0 );
-
-    if (info.has_audio) Mix_HookMusic( mp3callback, layer_smpeg_sample );
-    SMPEG_play( layer_smpeg_sample );
+    if (!nosound_flag){
+        SMPEG_setvolume(layer_smpeg_sample, music_volume);
+        if (info.has_audio) Mix_HookMusic(mp3callback, layer_smpeg_sample);
+    }
+    
+    SMPEG_loop(layer_smpeg_sample, loop_flag?1:0);
+    SMPEG_play(layer_smpeg_sample);
 
     bool done_flag = false;
-    while( !(done_flag & click_flag) && SMPEG_status(layer_smpeg_sample) == SMPEG_PLAYING ){
+    while(!(done_flag & click_flag) && SMPEG_status(layer_smpeg_sample) == SMPEG_PLAYING){
         SDL_Event event;
 
         while( SDL_PollEvent( &event ) ){
@@ -337,17 +368,27 @@ int ONScripter::playMPEG(const char *filename, bool click_flag, bool loop_flag)
         SDL_mutexP(oi.mutex);
         flushDirectYUV(&oi.overlay);
         SDL_mutexV(oi.mutex);
+#elif defined(ANDROID)
+        SDL_mutexP(smpeg_info->mutex);
+        flushDirect(screen_rect, REFRESH_NONE_MODE);
+        SDL_mutexV(smpeg_info->mutex);
 #endif
         SDL_Delay( 1 );
     }
 
+    if (!nosound_flag)
+        Mix_HookMusic( NULL, NULL );
     stopSMPEG();
-    Mix_HookMusic( NULL, NULL );
-    openAudio();
+    if (!nosound_flag)
+        openAudio();
 #if defined(USE_SDL_RENDERER)
     delete[] pixel_buf;
     SDL_DestroyMutex(oi.mutex);
     texture = SDL_CreateTextureFromSurface(renderer, accumulation_surface);
+#elif defined(ANDROID)
+    smpeg_info->image_surface = NULL;
+    delete smpeg_info;
+    smpeg_info = smpeg_info_back;
 #endif
 #elif !defined(IOS)
     fprintf( stderr, "mpegplay command is disabled.\n" );

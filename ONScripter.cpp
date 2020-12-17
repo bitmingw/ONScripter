@@ -2,7 +2,7 @@
  * 
  *  ONScripter.cpp - Execution block parser of ONScripter
  *
- *  Copyright (c) 2001-2016 Ogapee. All rights reserved.
+ *  Copyright (c) 2001-2020 Ogapee. All rights reserved.
  *
  *  ogapee@aqua.dti2.ne.jp
  *
@@ -26,7 +26,6 @@
 #include <fontconfig/fontconfig.h>
 #endif
 
-extern void initSJIS2UTF16();
 extern "C" void waveCallback( int channel );
 
 #define DEFAULT_AUDIOBUF  4096
@@ -181,8 +180,6 @@ void ONScripter::initSDL()
     screen_rect.w = screen_width;
     screen_rect.h = screen_height;
 
-    initSJIS2UTF16();
-    
     wm_title_string = new char[ strlen(DEFAULT_WM_TITLE) + 1 ];
     memcpy( wm_title_string, DEFAULT_WM_TITLE, strlen(DEFAULT_WM_TITLE) + 1 );
     wm_icon_string = new char[ strlen(DEFAULT_WM_ICON) + 1 ];
@@ -244,6 +241,7 @@ ONScripter::ONScripter()
     sprite2_info = new AnimationInfo[MAX_SPRITE2_NUM];
     texture_info = new AnimationInfo[MAX_TEXTURE_NUM];
     smpeg_info = NULL;
+    layer_alpha_buf = NULL;
     current_button_state.down_flag = false;
 
     int i;
@@ -379,6 +377,7 @@ int ONScripter::init()
     backup_surface       = AnimationInfo::allocSurface( screen_width, screen_height, texture_format );
     effect_src_surface   = AnimationInfo::allocSurface( screen_width, screen_height, texture_format );
     effect_dst_surface   = AnimationInfo::allocSurface( screen_width, screen_height, texture_format );
+    layer_alpha_buf = new unsigned char[screen_width*screen_height];
 
 #if defined(USE_SDL_RENDERER)
     screenshot_surface = AnimationInfo::alloc32bitSurface( screen_device_width, screen_device_height, texture_format );
@@ -400,6 +399,7 @@ int ONScripter::init()
     text_info.num_of_cells = 1;
     text_info.allocImage( screen_width, screen_height, texture_format );
     text_info.fill(0, 0, 0, 0);
+    text_info.blending_mode = AnimationInfo::BLEND_ADD2;
 
     // ----------------------------------------
     // Initialize font
@@ -529,10 +529,6 @@ void ONScripter::reset()
     all_sprite_hide_flag = false;
     all_sprite2_hide_flag = false;
 
-    if (breakup_cells) delete[] breakup_cells;
-    if (breakup_mask) delete[] breakup_mask;
-    if (breakup_cellforms) delete[] breakup_cellforms;
-
     if (resize_buffer_size != 16){
         delete[] resize_buffer;
         resize_buffer = new unsigned char[16];
@@ -547,7 +543,6 @@ void ONScripter::reset()
 
     new_line_skip_flag = false;
     text_on_flag = true;
-    draw_cursor_flag = false;
 
     setStr(&getret_str, NULL);
     getret_int = 0;
@@ -622,6 +617,7 @@ void ONScripter::resetSub()
     for (i=0 ; i<MAX_SPRITE2_NUM ; i++) sprite2_info[i].reset();
     for (i=0 ; i<MAX_TEXTURE_NUM ; i++) texture_info[i].reset();
     smpeg_info = NULL;
+    effect_src_info.reset();
     barclearCommand();
     prnumclearCommand();
     for (i=0 ; i<2 ; i++) cursor_info[i].reset();
@@ -634,7 +630,7 @@ void ONScripter::resetSub()
 
 void ONScripter::resetSentenceFont()
 {
-    sentence_font.reset();
+    sentence_font.reset(&script_h.enc);
     sentence_font.font_size_xy[0] = DEFAULT_FONT_SIZE;
     sentence_font.font_size_xy[1] = DEFAULT_FONT_SIZE;
     sentence_font.top_xy[0] = 21;
@@ -889,6 +885,10 @@ int ONScripter::parseLine( )
 
     const char *cmd = script_h.getStringBuffer();
     if      (cmd[0] == ';') return RET_CONTINUE;
+    else if (strncmp(cmd, "langjp", 6) == 0 &&
+             script_h.current_language == 0) return RET_CONTINUE;
+    else if (strncmp(cmd, "langen", 6) == 0 &&
+             script_h.current_language == 1) return RET_CONTINUE;
     else if (cmd[0] == '*') return RET_CONTINUE;
     else if (cmd[0] == ':') return RET_CONTINUE;
 

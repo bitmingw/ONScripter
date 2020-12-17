@@ -2,7 +2,7 @@
  *
  *  NsaReader.cpp - Reader from a NSA archive
  *
- *  Copyright (c) 2001-2014 Ogapee. All rights reserved.
+ *  Copyright (c) 2001-2019 Ogapee. All rights reserved.
  *
  *  ogapee@aqua.dti2.ne.jp
  *
@@ -23,8 +23,6 @@
 
 #include "NsaReader.h"
 #include <string.h>
-#define NSA_ARCHIVE_NAME "arc"
-#define NSA_ARCHIVE_NAME2 "arc%d"
 
 NsaReader::NsaReader( unsigned int nsa_offset, char *path, int archive_type, const unsigned char *key_table )
         :SarReader( path, key_table )
@@ -32,7 +30,8 @@ NsaReader::NsaReader( unsigned int nsa_offset, char *path, int archive_type, con
     sar_flag = true;
     this->nsa_offset = nsa_offset;
     this->archive_type = archive_type;
-    num_of_nsa_archives = 0;
+    num_of_nsa_archives[0] = 0;
+    num_of_nsa_archives[1] = 0;
     num_of_ns2_archives = 0;
 
     if (key_table)
@@ -49,48 +48,49 @@ NsaReader::~NsaReader()
 
 int NsaReader::open( const char *nsa_path )
 {
-    int i;
     bool archive_found = false;
-    char archive_name[256], archive_name2[256];
+    char archive_name[256];
 
-    if ( !SarReader::open( "arc.sar" ) ) return 0;
+    if (!SarReader::open("arc.sar")) return 0;
     
     sar_flag = false;
 
     if (archive_type & ARCHIVE_TYPE_NS2){
-        for ( i=0 ; i<MAX_NS2_ARCHIVE ; i++ ){
-            sprintf( archive_name, "%s%02d.%s", nsa_path?nsa_path:"", i, ns2_archive_ext );
-            if ( ( archive_info_ns2[i].file_handle = fopen( archive_name, "rb" ) ) == NULL ) break;
+        for (int i=0; i<MAX_NS2_ARCHIVE; i++){
+            sprintf(archive_name, "%s%02d.%s", nsa_path?nsa_path:"", i, ns2_archive_ext);
+            if ((archive_info_ns2[i].file_handle = fopen(archive_name, "rb")) == NULL) break;
         
+            ArchiveInfo *ai = &archive_info_ns2[i];
             archive_found = true;
-            archive_info_ns2[i].file_name = new char[strlen(archive_name)+1];
-            memcpy(archive_info_ns2[i].file_name, archive_name, strlen(archive_name)+1);
-            readArchive( &archive_info_ns2[i], ARCHIVE_TYPE_NS2, nsa_offset );
+            ai->file_name = new char[strlen(archive_name)+1];
+            memcpy(ai->file_name, archive_name, strlen(archive_name)+1);
+            readArchive(ai, ARCHIVE_TYPE_NS2, nsa_offset);
             num_of_ns2_archives = i+1;
         }
     }
 
     if (num_of_ns2_archives ==0 && archive_type & ARCHIVE_TYPE_NSA){
-        for ( i=-1 ; i<MAX_EXTRA_ARCHIVE ; i++ ){
-            ArchiveInfo *ai;
+        for (int k=0; k<2; k++){
+            for (int i=-1; i<MAX_EXTRA_ARCHIVE; i++){
+                ArchiveInfo *ai;
         
-            if (i == -1){
-                sprintf( archive_name, "%s%s.%s", nsa_path?nsa_path:"", NSA_ARCHIVE_NAME, nsa_archive_ext );
-                ai = &archive_info;
-            }
-            else{
-                sprintf( archive_name2, NSA_ARCHIVE_NAME2, i+1 );
-                sprintf( archive_name, "%s%s.%s", nsa_path?nsa_path:"", archive_name2, nsa_archive_ext );
-                ai = &archive_info2[i];
-            }
+                if (i == -1){
+                    sprintf(archive_name, "%s%sarc.%s", nsa_path?nsa_path:"", k==0?"patch/":"", nsa_archive_ext);
+                    ai = k==0?(&archive_info_patch):(&archive_info);
+                }
+                else{
+                    sprintf(archive_name, "%s%sarc%d.%s", nsa_path?nsa_path:"", k==0?"patch/":"", i+1, nsa_archive_ext);
+                    ai = &archive_info2[k][i];
+                }
         
-            if ( ( ai->file_handle = fopen( archive_name, "rb" ) ) == NULL ) break;
+                if ((ai->file_handle = fopen(archive_name, "rb")) == NULL) break;
 
-            archive_found = true;
-            ai->file_name = new char[strlen(archive_name)+1];
-            memcpy(ai->file_name, archive_name, strlen(archive_name)+1);
-            readArchive( ai, ARCHIVE_TYPE_NSA, nsa_offset );
-            num_of_nsa_archives = i+1;
+                archive_found = true;
+                ai->file_name = new char[strlen(archive_name)+1];
+                memcpy(ai->file_name, archive_name, strlen(archive_name)+1);
+                readArchive(ai, ARCHIVE_TYPE_NSA, nsa_offset);
+                num_of_nsa_archives[k] = i+1;
+            }
         }
     }
 
@@ -129,11 +129,19 @@ const char *NsaReader::getArchiveName() const
     return "nsa";
 }
 
-int NsaReader::getNumFiles(){
-    int total = archive_info.num_of_files, i;
-
-    for ( i=0 ; i<num_of_nsa_archives ; i++ ) total += archive_info2[i].num_of_files;
-    for ( i=0 ; i<num_of_ns2_archives ; i++ ) total += archive_info_ns2[i].num_of_files;
+int NsaReader::getNumFiles()
+{
+    int total = 0;
+    
+    ArchiveInfo* ai[2] = {&archive_info_patch, &archive_info};
+    for (int k=0; k<2; k++){
+        total += ai[k]->num_of_files;
+        for (int i=0; i<num_of_nsa_archives[k]; i++)
+            total += archive_info2[k][i].num_of_files;
+    }
+    
+    for (int i=0; i<num_of_ns2_archives; i++)
+        total += archive_info_ns2[i].num_of_files;
     
     return total;
 }
@@ -157,74 +165,79 @@ size_t NsaReader::getFileLengthSub( ArchiveInfo *ai, const char *file_name )
     return ai->fi_list[i].original_length;
 }
 
-size_t NsaReader::getFileLength( const char *file_name )
+size_t NsaReader::getFileLength(const char *file_name)
 {
-    if ( sar_flag ) return SarReader::getFileLength( file_name );
+    if (sar_flag) return SarReader::getFileLength(file_name);
 
     size_t ret;
-    int i;
     
-    if ( ( ret = DirectReader::getFileLength( file_name ) ) ) return ret;
+    if ((ret = DirectReader::getFileLength(file_name))) return ret;
     
-    for ( i=0 ; i<num_of_ns2_archives ; i++ ){
-        if ( (ret = getFileLengthSub( &archive_info_ns2[i], file_name )) ) return ret;
+    for (int i=0; i<num_of_ns2_archives; i++)
+        if ((ret = getFileLengthSub(&archive_info_ns2[i], file_name))) return ret;
+    
+    ArchiveInfo* ai[2] = {&archive_info_patch, &archive_info};
+    for (int k=0; k<2; k++){
+        if ((ret = getFileLengthSub(ai[k], file_name))) return ret;
+
+        for (int i=0; i<num_of_nsa_archives[k]; i++)
+            if ((ret = getFileLengthSub(&archive_info2[k][i], file_name))) return ret;
     }
     
-    if ( ( ret = getFileLengthSub( &archive_info, file_name )) ) return ret;
-
-    for ( i=0 ; i<num_of_nsa_archives ; i++ ){
-        if ( (ret = getFileLengthSub( &archive_info2[i], file_name )) ) return ret;
-    }
-
     return 0;
 }
 
-size_t NsaReader::getFile( const char *file_name, unsigned char *buffer, int *location )
+size_t NsaReader::getFile(const char *file_name, unsigned char *buffer, int *location)
 {
     size_t ret;
 
-    if ( sar_flag ) return SarReader::getFile( file_name, buffer, location );
+    if (sar_flag) return SarReader::getFile( file_name, buffer, location );
 
-    if ( ( ret = DirectReader::getFile( file_name, buffer, location ) ) ) return ret;
+    if ((ret = DirectReader::getFile(file_name, buffer, location))) return ret;
 
-    for ( int i=0 ; i<num_of_ns2_archives ; i++ ){
-        if ( (ret = getFileSub( &archive_info_ns2[i], file_name, buffer )) ){
-            if ( location ) *location = ARCHIVE_TYPE_NS2;
+    for (int i=0; i<num_of_ns2_archives; i++){
+        if ((ret = getFileSub(&archive_info_ns2[i], file_name, buffer))){
+            if (location) *location = ARCHIVE_TYPE_NS2;
             return ret;
         }
     }
 
-    if ( (ret = getFileSub( &archive_info, file_name, buffer )) ){
-        if ( location ) *location = ARCHIVE_TYPE_NSA;
-        return ret;
-    }
-
-    for ( int i=0 ; i<num_of_nsa_archives ; i++ ){
-        if ( (ret = getFileSub( &archive_info2[i], file_name, buffer )) ){
-            if ( location ) *location = ARCHIVE_TYPE_NSA;
+    ArchiveInfo* ai[2] = {&archive_info_patch, &archive_info};
+    for (int k=0; k<2; k++){
+        if ((ret = getFileSub(ai[k], file_name, buffer))){
+            if (location) *location = ARCHIVE_TYPE_NSA;
             return ret;
         }
-    }
 
+        for (int i=0; i<num_of_nsa_archives[k]; i++){
+            if ((ret = getFileSub(&archive_info2[k][i], file_name, buffer))){
+                if (location) *location = ARCHIVE_TYPE_NSA;
+                return ret;
+            }
+        }
+    }
+    
     return 0;
 }
 
-NsaReader::FileInfo NsaReader::getFileByIndex( unsigned int index )
+NsaReader::FileInfo NsaReader::getFileByIndex(unsigned int index)
 {
-    int i;
-    
-    for ( i=0 ; i<num_of_ns2_archives ; i++ ){
-        if ( index < archive_info_ns2[i].num_of_files ) return archive_info_ns2[i].fi_list[index];
+    for (int i=0; i<num_of_ns2_archives; i++){
+        if (index < archive_info_ns2[i].num_of_files) return archive_info_ns2[i].fi_list[index];
         index -= archive_info_ns2[i].num_of_files;
     }
 
-    if ( index < archive_info.num_of_files ) return archive_info.fi_list[index];
-    index -= archive_info.num_of_files;
+    ArchiveInfo* ai[2] = {&archive_info_patch, &archive_info};
+    for (int k=0; k<2; k++){
+        if (index < ai[k]->num_of_files) return archive_info.fi_list[index];
+        index -= ai[k]->num_of_files;
 
-    for ( i=0 ; i<num_of_nsa_archives ; i++ ){
-        if ( index < archive_info2[i].num_of_files ) return archive_info2[i].fi_list[index];
-        index -= archive_info2[i].num_of_files;
+        for (int i=0; i<num_of_nsa_archives[k]; i++){
+            if (index < archive_info2[k][i].num_of_files) return archive_info2[k][i].fi_list[index];
+            index -= archive_info2[k][i].num_of_files;
+        }
     }
+    
     fprintf( stderr, "NsaReader::getFileByIndex  Index %d is out of range\n", index );
 
     return archive_info.fi_list[0];

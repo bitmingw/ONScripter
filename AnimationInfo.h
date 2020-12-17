@@ -2,7 +2,7 @@
  * 
  *  AnimationInfo.h - General image storage class of ONScripter
  *
- *  Copyright (c) 2001-2016 Ogapee. All rights reserved.
+ *  Copyright (c) 2001-2019 Ogapee. All rights reserved.
  *
  *  ogapee@aqua.dti2.ne.jp
  *
@@ -72,6 +72,8 @@ public:
     bool is_single_line;
     bool is_tight_region; // valid under TRANS_STRING, if false, ruby is parsed
     bool is_ruby_drawable;
+    bool is_2x;
+    bool is_flipped;
         
     char *file_name;
     char *mask_file_name;
@@ -97,7 +99,8 @@ public:
 
     enum { BLEND_NORMAL = 0,
            BLEND_ADD    = 1,
-           BLEND_SUB    = 2
+           BLEND_SUB    = 2,
+           BLEND_ADD2   = 3
     };
     int blending_mode;
     int cos_i, sin_i;
@@ -138,9 +141,9 @@ public:
     void setCell(int cell);
     static int doClipping( SDL_Rect *dst, SDL_Rect *clip, SDL_Rect *clipped=NULL );
     void blendOnSurface( SDL_Surface *dst_surface, int dst_x, int dst_y,
-                         SDL_Rect &clip, int alpha=255 );
+                         SDL_Rect &clip, unsigned char *layer_alpha_buf, int alpha=255 );
     void blendOnSurface2( SDL_Surface *dst_surface, int dst_x, int dst_y,
-                          SDL_Rect &clip, int alpha=255 );
+                          SDL_Rect &clip, unsigned char *layer_alpha_buf, int alpha=255 );
     void blendText( SDL_Surface *surface, int dst_x, int dst_y, 
                     SDL_Color &color, SDL_Rect *clip, bool rotate_flag );
     void calcAffineMatrix();
@@ -155,6 +158,7 @@ public:
     unsigned char getAlpha(int x, int y);
 
     void convertFromYUV(SDL_Overlay *src);
+    void subtract( SDL_Surface *surface, AnimationInfo *layer_info, unsigned char *layer_alpha_buf);
 };
 
 #endif // __ANIMATION_INFO_H__

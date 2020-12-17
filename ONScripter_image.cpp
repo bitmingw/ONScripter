@@ -2,7 +2,7 @@
  * 
  *  ONScripter_image.cpp - Image processing in ONScripter
  *
- *  Copyright (c) 2001-2016 Ogapee. All rights reserved.
+ *  Copyright (c) 2001-2019 Ogapee. All rights reserved.
  *
  *  ogapee@aqua.dti2.ne.jp
  *
@@ -25,7 +25,7 @@
 #include <new>
 #include "resize_image.h"
 
-SDL_Surface *ONScripter::loadImage(char *filename, bool *has_alpha, int *location, unsigned char *alpha)
+SDL_Surface *ONScripter::loadImage(char *filename, bool is_flipped, bool *has_alpha, int *location, unsigned char *alpha)
 {
     if (!filename) return NULL;
 
@@ -37,6 +37,20 @@ SDL_Surface *ONScripter::loadImage(char *filename, bool *has_alpha, int *locatio
     else
         tmp = createSurfaceFromFile(filename, has_alpha, location);
     if (tmp == NULL) return NULL;
+
+    if (is_flipped){
+        SDL_PixelFormat *fmt = tmp->format;
+        SDL_Surface *tmp2 = SDL_CreateRGBSurface(SDL_SWSURFACE, tmp->w, tmp->h,
+                                                 fmt->BitsPerPixel, fmt->Rmask, fmt->Gmask, fmt->Bmask, fmt->Amask);
+        for (int y=0; y<tmp->h; ++y) {
+            Uint32 *src = (Uint32 *)tmp->pixels + tmp->w * y;
+            Uint32 *dst = (Uint32 *)tmp2->pixels + tmp2->w * (y + 1) - 1;
+            for (int x=0; x<tmp->w; x++)
+                *dst-- = *src++;
+        }
+        SDL_FreeSurface(tmp);
+        tmp = tmp2;
+    }
 
     SDL_Surface *ret;
     if((tmp->w * tmp->format->BytesPerPixel == tmp->pitch) &&
@@ -211,19 +225,21 @@ int ONScripter::resizeSurface( SDL_Surface *src, SDL_Surface *dst )
 }
 
 #if defined(BPP16)
-#define BLEND_PIXEL_MASK(){\
-    Uint32 s1 = (*src1_buffer | *src1_buffer << 16) & 0x07e0f81f; \
-    Uint32 s2 = (*src2_buffer | *src2_buffer << 16) & 0x07e0f81f; \
-    Uint32 mask_rb = (s1 + ((s2-s1) * mask2 >> 5)) & 0x07e0f81f; \
-    *dst_buffer = mask_rb | mask_rb >> 16; \
+#define BLEND_PIXEL_MASK()\
+{\
+    Uint32 s1 = (*src1_buffer | *src1_buffer << 16) & 0x07e0f81f;\
+    Uint32 s2 = (*src2_buffer | *src2_buffer << 16) & 0x07e0f81f;\
+    Uint32 d = (s1 + ((s2 - s1) * alpha >> 5)) & 0x07e0f81f;\
+    *dst_buffer = d | d >> 16;\
 }
 #else
-#define BLEND_PIXEL_MASK(){\
-    Uint32 temp = *src1_buffer & 0xff00ff;\
-    Uint32 mask_rb = (((((*src2_buffer & 0xff00ff) - temp ) * mask2 ) >> 8 ) + temp ) & 0xff00ff;\
-    temp = *src1_buffer & 0x00ff00;\
-    Uint32 mask_g  = (((((*src2_buffer & 0x00ff00) - temp ) * mask2 ) >> 8 ) + temp ) & 0x00ff00;\
-    *dst_buffer = mask_rb | mask_g;\
+#define BLEND_PIXEL_MASK()\
+{\
+    Uint32 s1 = *src1_buffer & 0xff00ff;\
+    Uint32 d1 = (s1 + ((((*src2_buffer & 0xff00ff) - s1) * alpha) >> 8));\
+    s1 = *src1_buffer & 0x00ff00;\
+    Uint32 d2 = (s1 + ((((*src2_buffer & 0x00ff00) - s1) * alpha) >> 8));\
+    *dst_buffer = (d1 & 0xff00ff) | (d2 & 0x00ff00);\
 }
 // Originally, the above looks like this.
 //    mask1 = mask2 ^ 0xff;
@@ -238,7 +254,7 @@ int ONScripter::resizeSurface( SDL_Surface *src, SDL_Surface *dst )
 // src1: effect_src_surface
 // src2: effect_dst_surface
 void ONScripter::alphaBlend( SDL_Surface *mask_surface,
-                                  int trans_mode, Uint32 mask_value, SDL_Rect *clip )
+                             int trans_mode, Uint32 mask_value, SDL_Rect *clip )
 {
     SDL_Rect rect = screen_rect;
     int i, j;
@@ -253,7 +269,8 @@ void ONScripter::alphaBlend( SDL_Surface *mask_surface,
 
     SDL_LockSurface( effect_src_surface );
     SDL_LockSurface( effect_dst_surface );
-    SDL_LockSurface( accumulation_surface );
+    if (accumulation_surface != effect_dst_surface)
+        SDL_LockSurface( accumulation_surface );
     if ( mask_surface ) SDL_LockSurface( mask_surface );
     
     ONSBuf *src1_buffer = (ONSBuf *)effect_src_surface->pixels   + effect_src_surface->w * rect.y + rect.x;
@@ -287,12 +304,13 @@ void ONScripter::alphaBlend( SDL_Surface *mask_surface,
 
             int j2 = rect.x;
             for ( j=0 ; j<rect.w ; j++ ){
-                Uint32 mask2 = 0;
+                Uint32 alpha = 0;
                 Uint32 mask = *(mask_buffer + j2) & lowest_mask;
                 if ( mask_value > mask ){
-                    mask2 = mask_value - mask;
-                    if ( mask2 & overflow_mask ) mask2 = lowest_mask;
+                    alpha = mask_value - mask;
+                    if ( alpha & overflow_mask ) alpha = lowest_mask;
                 }
+                alpha++;
                 BLEND_PIXEL_MASK();
                 src1_buffer++; src2_buffer++; dst_buffer++;
 
@@ -304,7 +322,7 @@ void ONScripter::alphaBlend( SDL_Surface *mask_surface,
             dst_buffer  += screen_width - rect.w;
         }
     }else{ // ALPHA_BLEND_CONST
-        Uint32 mask2 = mask_value & lowest_mask;
+        Uint32 alpha = (mask_value & lowest_mask) + 1;
 
         for ( i=0; i<rect.h ; i++ ) {
             for ( j=rect.w ; j!=0 ; j-- ){
@@ -318,35 +336,36 @@ void ONScripter::alphaBlend( SDL_Surface *mask_surface,
     }
     
     if ( mask_surface ) SDL_UnlockSurface( mask_surface );
-    SDL_UnlockSurface( accumulation_surface );
+    if (accumulation_surface != effect_dst_surface)
+        SDL_UnlockSurface( accumulation_surface );
     SDL_UnlockSurface( effect_dst_surface );
     SDL_UnlockSurface( effect_src_surface );
 }
 
 #define BLEND_PIXEL_TEXT_BPP16()\
 {\
-    Uint32 mask2 = *src_buffer >> 3;                                    \
-    if (mask2 != 0){                                                    \
-        Uint32 d1   = (*dst_buffer | *dst_buffer << 16) & 0x07e0f81f;   \
-        Uint32 mask = (d1 + ((src_color-d1) * mask2 >> 5)) & 0x07e0f81f; \
-        *dst_buffer = mask | mask >> 16;                                \
-    }                                                                   \
+    Uint32 sa = (*src_buffer + 1) >> 3;\
+    if (sa != 0){\
+        Uint32 d = (*dst_buffer | *dst_buffer << 16) & 0x07e0f81f;\
+        d = (d + (((src_color - d) * sa) >> 5)) & 0x07e0f81f;\
+        *dst_buffer = d | d >> 16;\
+    }\
 }
 
 #define BLEND_PIXEL_TEXT()\
 {\
-    Uint32 mask2 = *src_buffer;                                     \
-    if (mask2 == 255){\
+    Uint32 sa = *src_buffer;\
+    if (sa == 255){\
     	*dst_buffer = src_color3;\
     }\
-    else if (mask2 != 0){                                           \
-        Uint32 mask1   = mask2 ^ 0xff;                              \
-        Uint32 mask_rb = (((*dst_buffer & 0xff00ff) * mask1 +       \
-                           src_color1 * mask2) >> 8) & 0xff00ff;    \
-        Uint32 mask_g  = (((*dst_buffer & 0x00ff00) * mask1 +       \
-                           src_color2 * mask2) >> 8) & 0x00ff00;    \
-        *dst_buffer    = 0xff000000 | mask_rb | mask_g;             \
-    }                                                               \
+    else if (sa != 0){\
+        sa++;\
+        Uint32 d = *dst_buffer & 0xff00ff;\
+        Uint32 d1 = (d + (((src_color1 - d) * sa) >> 8));\
+        d = *dst_buffer & 0x00ff00;\
+        Uint32 d2 = (d + (((src_color2 - d) * sa) >> 8));\
+        *dst_buffer = (d1 & 0xff00ff) | (d2 & 0x00ff00) | 0xff000000;\
+    }\
 }
 
 // alphaBlendText
@@ -489,6 +508,14 @@ void ONScripter::makeMonochromeSurface( SDL_Surface *surface, SDL_Rect &clip )
     SDL_UnlockSurface( surface );
 }
 
+#define FILL_LAYER_ALPHA_BUF()\
+{\
+    for (int y=clip.y; y<clip.y+clip.h; y++){\
+        unsigned char *p = layer_alpha_buf + screen_width*y + clip.x;\
+        for (int x=clip.w; x>0; --x) *p++ = 0xff;\
+    }\
+}
+
 void ONScripter::refreshSurface( SDL_Surface *surface, SDL_Rect *clip_src, int refresh_mode )
 {
     if (refresh_mode == REFRESH_NONE_MODE) return;
@@ -508,8 +535,11 @@ void ONScripter::refreshSurface( SDL_Surface *surface, SDL_Rect *clip_src, int r
         else
             top = z_order;
         for ( i=MAX_SPRITE_NUM-1 ; i>top ; i-- ){
-            if ( sprite_info[i].image_surface && sprite_info[i].visible )
+            if ( sprite_info[i].image_surface && sprite_info[i].visible ){
                 drawTaggedSurface( surface, &sprite_info[i], clip );
+                if (smpeg_info == &sprite_info[i])
+                    FILL_LAYER_ALPHA_BUF();
+            }
         }
     }
 
@@ -527,15 +557,18 @@ void ONScripter::refreshSurface( SDL_Surface *surface, SDL_Rect *clip_src, int r
 
         if (!all_sprite2_hide_flag){
             for ( i=MAX_SPRITE2_NUM-1 ; i>=0 ; i-- ){
-                if ( sprite2_info[i].image_surface && sprite2_info[i].visible )
+                if ( sprite2_info[i].image_surface && sprite2_info[i].visible ){
                     drawTaggedSurface( surface, &sprite2_info[i], clip );
+                    if (smpeg_info == &sprite2_info[i])
+                        FILL_LAYER_ALPHA_BUF();
+                }
             }
         }
     
         if (refresh_mode & REFRESH_SHADOW_MODE)
             shadowTextDisplay( surface, clip );
         if (refresh_mode & REFRESH_TEXT_MODE)
-            text_info.blendOnSurface( surface, 0, 0, clip );
+            text_info.blendOnSurface( surface, 0, 0, clip, layer_alpha_buf );
     }
 
     if ( !all_sprite_hide_flag ){
@@ -544,16 +577,22 @@ void ONScripter::refreshSurface( SDL_Surface *surface, SDL_Rect *clip_src, int r
         else
             top = 0;
         for ( i=z_order ; i>=top ; i-- ){
-            if ( sprite_info[i].image_surface && sprite_info[i].visible )
+            if ( sprite_info[i].image_surface && sprite_info[i].visible ){
                 drawTaggedSurface( surface, &sprite_info[i], clip );
+                if (smpeg_info == &sprite_info[i])
+                    FILL_LAYER_ALPHA_BUF();
+            }
         }
     }
 
     if ( !windowback_flag ){
         if (!all_sprite2_hide_flag){
             for ( i=MAX_SPRITE2_NUM-1 ; i>=0 ; i-- ){
-                if ( sprite2_info[i].image_surface && sprite2_info[i].visible )
+                if ( sprite2_info[i].image_surface && sprite2_info[i].visible ){
                     drawTaggedSurface( surface, &sprite2_info[i], clip );
+                    if (smpeg_info == &sprite2_info[i])
+                        FILL_LAYER_ALPHA_BUF();
+                }
             }
         }
 
@@ -577,7 +616,7 @@ void ONScripter::refreshSurface( SDL_Surface *surface, SDL_Rect *clip_src, int r
         if (refresh_mode & REFRESH_SHADOW_MODE)
             shadowTextDisplay( surface, clip );
         if (refresh_mode & REFRESH_TEXT_MODE)
-            text_info.blendOnSurface( surface, 0, 0, clip );
+            text_info.blendOnSurface( surface, 0, 0, clip, layer_alpha_buf );
     }
 
     if ( refresh_mode & REFRESH_CURSOR_MODE && !textgosub_label ){
