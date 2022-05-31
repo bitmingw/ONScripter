@@ -2,7 +2,7 @@
  * 
  *  onscripter_main.cpp -- main function of ONScripter
  *
- *  Copyright (c) 2001-2020 Ogapee. All rights reserved.
+ *  Copyright (c) 2001-2022 Ogapee. All rights reserved.
  *
  *  ogapee@aqua.dti2.ne.jp
  *
@@ -102,7 +102,7 @@ void optionHelp()
 void optionVersion()
 {
     printf("Written by Ogapee <ogapee@aqua.dti2.ne.jp>\n\n");
-    printf("Copyright (c) 2001-2020 Ogapee.\n");
+    printf("Copyright (c) 2001-2022 Ogapee.\n");
     printf("This is free software; see the source for copying conditions.\n");
     exit(0);
 }
@@ -118,6 +118,9 @@ static jobject JavaONScripter = NULL;
 static jmethodID JavaPlayVideo = NULL;
 static jmethodID JavaGetFD = NULL;
 static jmethodID JavaMkdir = NULL;
+static long *fd_start_offset = NULL;
+static long *fd_length= NULL;
+static long max_fd = 0;
 
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved)
 {
@@ -142,7 +145,7 @@ JNIEXPORT jint JNICALL JAVA_EXPORT_NAME(ONScripter_nativeInitJavaCallbacks) (JNI
     JavaONScripter = jniEnv->NewGlobalRef(thiz);
     jclass JavaONScripterClass = jniEnv->GetObjectClass(JavaONScripter);
     JavaPlayVideo = jniEnv->GetMethodID(JavaONScripterClass, "playVideo", "([C)V");
-    JavaGetFD = jniEnv->GetMethodID(JavaONScripterClass, "getFD", "([CI)I");
+    JavaGetFD = jniEnv->GetMethodID(JavaONScripterClass, "getFD", "([CI)[J");
     JavaMkdir = jniEnv->GetMethodID(JavaONScripterClass, "mkdir", "([C)I");
     return 0;
 }
@@ -179,6 +182,89 @@ void playVideoAndroid(const char *filename)
     delete[] jc;
 }
 
+static void resize_fd_buffer(int fd)
+{
+    if (fd >= max_fd){
+        long *tmp_fd_start_offset = fd_start_offset;
+        fd_start_offset = new long[fd + 1];
+        memset(fd_start_offset, sizeof(long)*(fd + 1), 0);
+        
+        long *tmp_fd_length = fd_length;
+        fd_length = new long[fd + 1];
+        memset(fd_length, sizeof(long)*(fd + 1), 0);
+        
+        if (max_fd > 0){
+            memcpy(fd_start_offset, tmp_fd_start_offset, sizeof(long)*max_fd);
+            delete[] tmp_fd_start_offset;
+            memcpy(fd_length, tmp_fd_length, sizeof(long)*max_fd);
+            delete[] tmp_fd_length;
+        }
+        
+        max_fd = fd + 1;
+    }
+}
+
+#undef fseek
+int fseek_ons(FILE *stream, long offset, int whence)
+{
+    int fd = fileno(stream);
+    
+    if (whence == SEEK_SET)
+        return fseek(stream, fd_start_offset[fd] + offset, whence);
+    else if (whence == SEEK_CUR)
+        return fseek(stream, offset, whence);
+    
+    return fseek(stream, fd_start_offset[fd] + fd_length[fd] + offset, SEEK_SET); // SEEK_END
+}
+
+#undef ftell
+long ftell_ons(FILE *stream)
+{
+    int fd = fileno(stream);
+    
+    return ftell(stream) - fd_start_offset[fd];
+}
+
+#undef fgetc
+int fgetc_ons(FILE *stream)
+{
+    int fd = fileno(stream);
+    long pos = ftell(stream);
+    long end_pos = fd_start_offset[fd] + fd_length[fd];
+    
+    if (pos >= end_pos) return EOF;
+    
+    return fgetc(stream);
+}
+
+#undef fgets
+char *fgets_ons(char *s, int size, FILE *stream)
+{
+    int fd = fileno(stream);
+    long pos = ftell(stream);
+    long end_pos = fd_start_offset[fd] + fd_length[fd];
+    
+    if (pos + size >= end_pos){
+        size = end_pos - pos;
+        if (size <= 0) return NULL;
+    }
+    
+    return fgets(s, size, stream);
+}
+
+#undef fread
+size_t fread_ons(void *ptr, size_t size, size_t nmemb, FILE *stream)
+{
+    int fd = fileno(stream);
+    long pos = ftell(stream);
+    long end_pos = fd_start_offset[fd] + fd_length[fd];
+    
+    if (pos + size*nmemb >= end_pos)
+        nmemb = (end_pos - pos)/size;
+    
+    return fread(ptr, size, nmemb, stream);
+}
+
 #undef fopen
 FILE *fopen_ons(const char *path, const char *mode)
 {
@@ -186,7 +272,17 @@ FILE *fopen_ons(const char *path, const char *mode)
     if (mode[0] == 'w') mode2 = 1;
 
     FILE *fp = fopen(path, mode);
-    if (fp || mode2 ==0 || errno != EACCES) return fp;
+    if (mode2 == 0 && fp){
+        int fd = fileno(fp);
+        resize_fd_buffer(fd);
+        
+        fd_start_offset[fd] = 0;
+        fseek(fp, 0, SEEK_END);
+        fd_length[fd] = ftell(fp);
+        fseek(fp, 0, SEEK_SET);
+        
+        return fp;
+    }
     
     JNIEnv * jniEnv = NULL;
     jniVM->AttachCurrentThread(&jniEnv, NULL);
@@ -201,11 +297,32 @@ FILE *fopen_ons(const char *path, const char *mode)
         jc[i] = path[i];
     jcharArray jca = jniEnv->NewCharArray(strlen(path));
     jniEnv->SetCharArrayRegion(jca, 0, strlen(path), jc);
-    int fd = jniEnv->CallIntMethod( JavaONScripter, JavaGetFD, jca, mode2 );
+    jlongArray jla = (jlongArray)jniEnv->CallObjectMethod( JavaONScripter, JavaGetFD, jca, mode2 );
+    jlong jl[3];
+    jniEnv->GetLongArrayRegion(jla, 0, 3, jl);
+    int fd = jl[0];
     jniEnv->DeleteLocalRef(jca);
+    jniEnv->DeleteLocalRef(jla);
     delete[] jc;
 
-    return fdopen(fd, mode);
+    fp = fdopen(fd, mode);
+    if (mode2 == 0 && fp){
+        resize_fd_buffer(fd);
+        
+        if (jl[1] >= 0){
+            fd_start_offset[fd] = jl[1];
+            fd_length[fd] = jl[2];
+        }
+        else{
+            fd_start_offset[fd] = 0;
+            fseek(fp, 0, SEEK_END);
+            fd_length[fd] = ftell(fp);
+        }
+        
+        fseek(fp, fd_start_offset[fd], SEEK_SET);
+    }
+    
+    return fp;
 }
 
 #undef mkdir

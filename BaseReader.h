@@ -2,7 +2,7 @@
  *
  *  BaseReader.h - Base class of archive reader
  *
- *  Copyright (c) 2001-2018 Ogapee. All rights reserved.
+ *  Copyright (c) 2001-2022 Ogapee. All rights reserved.
  *
  *  ogapee@aqua.dti2.ne.jp
  *
@@ -26,6 +26,16 @@
 
 #include <stdio.h>
 #ifdef ANDROID
+extern "C" int fseek_ons(FILE *stream, long offset, int whence);
+#define fseek fseek_ons
+extern "C" long ftell_ons(FILE *stream);
+#define ftell ftell_ons
+extern "C" int fgetc_ons(FILE *stream);
+#define fgetc fgetc_ons
+extern "C" char *fgets_ons(char *s, int size, FILE *stream);
+#define fgets fgets_ons
+extern "C" size_t fread_ons(void *ptr, size_t size, size_t nmemb, FILE *stream);
+#define fread fread_ons
 extern "C" FILE *fopen_ons(const char *str, const char *mode);
 #define fopen fopen_ons
 extern "C" int mkdir_ons(const char *pathname, mode_t mode);

@@ -1,6 +1,6 @@
 /* 
  * CSS resource file for ONScripter web page
- *  Copyright (c) 2001-2010 Ogapee. All rights reserved.
+ *  Copyright (c) 2001-2022 Ogapee. All rights reserved.
  *  ogapee@aqua.dti2.ne.jp
  */
 
@@ -10,10 +10,31 @@ a:visited { color: #800000; }
 a:active{ color: #FF0000; text-decoration: underline; }
 a:hover{ background-color: #ccffcc; }
 
+html{
+    font-size: 16px;
+    line-height: 1.6em;
+    font-family: sans-selif;
+}
+
+h1{
+    font-size: 32px;
+    text-align: center;
+}
+
+h2{
+    font-size: 24px;
+}
+
+h3{
+    font-size: 20px;
+}
+
+h3, h4, h5{
+    font-size: 16px;
+}
+
 body{
 text-align: left;
-font-size: 100%;
-line-height: 1.4;
 color: black;
 background-color: gray;
 }
@@ -32,11 +53,16 @@ text-indent: 0em;
 /* general page */
 
 #body{
-position: absolute;
-left: 50%;
-width: 800px;
-margin-left: -400px; 
-background-color: white;
+    position: absolute;
+    background-color: white;
+}
+
+@media screen and (min-width: 800px){
+    #body{
+        left: 50%;
+        width: 800px;
+        margin-left: -400px;
+    }
 }
 
 #header{
@@ -54,10 +80,6 @@ color: #112244;
 background-color: white;
 }
 
-#header h1{
-font-size: 167%;
-text-align: center;
-}
 
 /*#header a {background-color: #ddffdd; }*/
 #header a:link{ color: #4444ff; }
@@ -70,22 +92,21 @@ text-align: center;
 #toc-container{
 float: left;
 width: 180px;
-font-size: 90%;
 }
 
 #toc{
 padding: 5px;
 text-align: left;
+background-color: white;
 }
 
-#toc h3{
-margin: 0px;
-padding: 5px;
-font-size: 100%;
+#toc-container h3{
+margin: 5px;
+padding: 0px;
 text-align: center;
-border-top: solid 1px #eef;
-border-bottom: solid 1px #eef;
+border: solid 1px #bbc;
 background-color: #f5f5ff;
+border-radius: 10px;
 }
 
 #toc ul{
@@ -129,12 +150,13 @@ border: none;
 /* -------------------- */
 /* main page */
 #main-container{
-margin-left: 180px;
+    margin-left: 180px;
+    position: static;
+    background-color: white;
 }
 
 #main{
 text-align: left;
-font-size: 100%;
 }
 
 #main h2{
@@ -150,24 +172,25 @@ padding: 0px;
 /*border-bottom: solid 1px black;*/
 }
 
-#main .content h2{
+#main .content p{
 margin: 0px;
-margin-bottom: 5px;
+padding: 5px;
+}
+
+#main .content h2{
+margin: 5px;
 padding: 15px 30px;
-font-size: 110%;
 font-weight: bold;
 color: black;
-border-top: solid 1px #eef;
-border-bottom: solid 1px #eef;
+border-top: solid 1px #bbc;
+border-bottom: solid 1px #bbc;
 background-color: #f5f5ff;
 }
 
 #main .content h3{
 margin: 5px;
-margin-top: 15px;
 padding: 0px;
 padding-left: 10px;
-font-size: 100%;
 border-left: solid 5px #0000aa;
 border-bottom: dotted 1px gray;
 }
@@ -196,7 +219,6 @@ margin-left: 180px;
 
 #diary{
 text-align: left;
-font-size: 100%;
 }
 
 #diary h2{
@@ -210,7 +232,6 @@ text-align: center;
 margin: 5px;
 margin-bottom: 25px;
 padding: 0px;
-font-size: 100%;
 /*border-top: dashed 1px gray;*/
 }
 
@@ -235,7 +256,6 @@ text-align: left;
 color: black;
 background-color: #fcfcff;
 margin: 5px;
-margin-bottom: 10pt;
 padding: 2pt;
 }
 
@@ -305,4 +325,56 @@ padding: 0.2em;
 div.figure p{ 
 text-align: center;
 text-indent: 0;
+}
+
+@media screen and (max-width: 767px) {
+    #header{
+        background-size: 32px;
+    }
+    
+    h1{
+        font-size: 24px;
+    }
+    
+    h2{
+        font-size: 20px;
+    }
+    
+    h3{
+        font-size: 18px;
+    }
+
+    h3, h4, h5{
+        font-size: 16px;
+    }
+    
+    #toc-container{
+        float: none;
+    }
+
+    #toc {
+        display: none;
+        position: absolute;
+    }
+
+    #toc-container:hover #toc{
+        display: block;
+        positoin: absolute;
+        z-index: 1;
+        border: solid 1px #888;
+    }
+    
+    #main-container {
+        margin-left: 0;
+    }
+    
+    #diary-container {
+        margin-left: 0;
+    }
+    
+    #body{
+        left: 0;
+        margin-left: 0;
+        width: 100%;
+    }
 }

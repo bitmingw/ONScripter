@@ -3,8 +3,9 @@
 <HEAD>
 <META http-equiv="Content-Type" content="text/html; charset=EUC-JP">
 <META http-equiv="Content-Style-Type" content="text/css">
+<META name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no">
 <TITLE>ONScripter のページ</TITLE>
-<LINK rel="stylesheet" type="text/css" href="ogapee.css">
+<LINK rel="stylesheet" type="text/css" href="/ogapee.css">
 </HEAD>
 
 <body>
@@ -20,15 +21,17 @@
 Since: Feb. 6, 2002<br>
 <!--Last updated: Mar. 21, 2016 (BTS復旧)<br>-->
 <!--Last updated: Jan. 14, 2020 (ONScripter on Windows 更新)<br>-->
-Last updated: Jul. 22, 2020 (ソース更新)<br>
+Last updated: Jan. 23, 2022 (ソース更新)<br>
+<!--Last updated: Jan. 3, 2022 (動作確認プラットフォームに <a href="/cgi-bin/kagemai/guest.cgi?id=364&project=onscripter&action=view_report">Haiku</a> を追加)<br>-->
 <!--Last updated: Jun. 29, 2014 (PNaCl バイナリパッケージ追加)<br>-->
 <!--Last updated: Jul. 12, 2009 (Experimental ソース更新)<br>-->
 </div> <!-- header -->
 
 <div id="toc-container">
-<div id="toc">
 
 <h3>目次</h3>
+
+<div id="toc">
 
 <ul>
   <li> <a href="#INTRODUCTION">はじめに</a>
@@ -36,7 +39,7 @@ Last updated: Jul. 22, 2020 (ソース更新)<br>
       <li> <a href="#package-source">ソースパッケージ</a></li>
       <li> <a href="#package-binary">バイナリパッケージ</a></li>
       <li> <a href="#feature">特長</a>
-      <li> <a href="onscripter_devel.2020.html">開発日誌</a></li>
+      <li> <a href="onscripter_devel.2022.html">開発日誌</a></li>
       <li> <a href="/cgi-bin/kagemai/guest.cgi?project=onscripter&amp;action=top">バグ報告</a></li>
       <li> <a href="android/">ONScripter on Android</a>
       <li> <a href="ios/">ONScripter on iOS</a>
@@ -89,10 +92,10 @@ Last updated: Jul. 22, 2020 (ソース更新)<br>
 
 <table><tr>
 <td>最新版</td>
-<td><a href="onscripter-20200722.tar.gz">onscripter-20200722.tar.gz</a></td>
+<td><a href="onscripter-20220123.tar.gz">onscripter-20220123.tar.gz</a></td>
 </tr><tr>
 <td>旧版</td>
-<td><a href="onscripter-20200721.tar.gz">onscripter-20200721.tar.gz</a></td>
+<td><a href="onscripter-20220115.tar.gz">onscripter-20220115.tar.gz</a></td>
 </tr></table>
 <!--  <li> <a href="onscripter-exp-20090712.tar.gz">onscripter-exp-20090712.tar.gz</a>(実験版, バグ修正)-->
 
@@ -157,7 +160,7 @@ Last updated: Jul. 22, 2020 (ソース更新)<br>
   <li> 現時点(2011/12/15)で最新の NScripter と互換性のあるセーブファイルを入出力することもできます。<a href="#save">異なるプラットフォーム上で同時に遊ぶ方法</a>を参照してください。
   <li> 全ての操作をキーボードから行うことができます。もちろんマウスも使えます。
   <li> CD Audio の再生を音楽ファイル(MP3, Ogg)の再生に変更することができます。
-  <li> マルチプラットフォームに対応しており、Windows, Linux, MacOS X, MacOS 9, <a href="android/">Android</a>(1.6 以上), iPhone, iPad, PSP, <a href="zaurus/index.html">Zaurus</a>(SL-5500,SL-A300,SL-B500,SL-C700), FreeBSD, Solaris(on SPARC), Tru64 UNIX, OS/2Warp, iPod, PocketPC, Playstation3, Wii, GP2X, NetWalker, Dreamcast での動作が確認されています。それ以外のプラットフォームでも、<a href="#environment">動作環境</a>が準備できれば動作するはずです。<br>
+  <li> マルチプラットフォームに対応しており、Windows, Linux, MacOS X, MacOS 9, <a href="android/">Android</a>(1.6 以上), iPhone, iPad, PSP, <a href="zaurus/index.html">Zaurus</a>(SL-5500,SL-A300,SL-B500,SL-C700), FreeBSD, <a href="/cgi-bin/kagemai/guest.cgi?id=381&project=onscripter&action=view_report">OpenBSD</a>, <a href="/cgi-bin/kagemai/guest.cgi?id=364&project=onscripter&action=view_report">Haiku</a>, Solaris(on SPARC), Tru64 UNIX, OS/2Warp, iPod, PocketPC, Playstation3, Wii, GP2X, NetWalker, Dreamcast での動作が確認されています。それ以外のプラットフォームでも、<a href="#environment">動作環境</a>が準備できれば動作するはずです。<br>
   <li> 全ての命令・仕様を実装していないため、ゲームによっては挙動がおかしくなります。その場合は上記バグトラッキングシステムまで御報告下さい。
 </ol>
 
@@ -750,7 +753,7 @@ return
 
 <div id="footer">
 メール宛先 <i>ogapee@yahoo.kp at aqua.dti2.ne.jp</i> （yahoo.kp at は除いてください）<br>
-Copyright (c) 1998-2020 Studio O.G.A. All rights reserved.
+Copyright (c) 1998-2022 Studio O.G.A. All rights reserved.
 </div> <!-- footer -->
 
 </div> <!-- body -->

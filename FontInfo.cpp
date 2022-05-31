@@ -2,7 +2,7 @@
  * 
  *  FontInfo.cpp - Font information storage class of ONScripter
  *
- *  Copyright (c) 2001-2020 Ogapee. All rights reserved.
+ *  Copyright (c) 2001-2022 Ogapee. All rights reserved.
  *
  *  ogapee@aqua.dti2.ne.jp
  *
@@ -109,9 +109,18 @@ void *FontInfo::openFont( char *font_file, int ratio1, int ratio2 )
         fc->next->power_resume_number = psp_power_resume_number;
         strcpy(fc->next->name, font_file);
 #else
-        fc->next->font[0] = TTF_OpenFont( font_file, font_size * ratio1 / ratio2 );
+        fp = fopen(font_file, "rb");
+        fseek(fp, 0, SEEK_END);
+        long length = ftell(fp);
+        unsigned char *buf = new unsigned char[length]; // not released
+        fseek(fp, 0, SEEK_SET);
+        fread(buf, 1, length, fp);
+        fclose(fp);
+        SDL_RWops *src = SDL_RWFromMem(buf, length);
+        fc->next->font[0] = TTF_OpenFontRW(src, 1, font_size * ratio1 / ratio2);
 #if (SDL_TTF_MAJOR_VERSION>=2) && (SDL_TTF_MINOR_VERSION>=0) && (SDL_TTF_PATCHLEVEL>=10)
-        fc->next->font[1] = TTF_OpenFont( font_file, font_size * ratio1 / ratio2 );
+        SDL_RWops *src2 = SDL_RWFromMem(buf, length);
+        fc->next->font[1] = TTF_OpenFontRW(src2, 1, font_size * ratio1 / ratio2);
         TTF_SetFontOutline(fc->next->font[1], 1);
 #endif
 #endif
