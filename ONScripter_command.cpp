@@ -2,7 +2,7 @@
  * 
  *  ONScripter_command.cpp - Command executer of ONScripter
  *
- *  Copyright (c) 2001-2019 Ogapee. All rights reserved.
+ *  Copyright (c) 2001-2022 Ogapee. All rights reserved.
  *
  *  ogapee@aqua.dti2.ne.jp
  *
@@ -3497,7 +3497,7 @@ int ONScripter::captionCommand()
 int ONScripter::btnwaitCommand()
 {
     bool del_flag=false, textbtn_flag=false;
-    bool bexec_int_flag=false;
+    bool bexec_2nd_flag=false;
     bexec_flag = false;
 
     if ( script_h.isName( "btnwait2" ) ){
@@ -3515,11 +3515,11 @@ int ONScripter::btnwaitCommand()
     }
 
     if (bexec_flag){
-        script_h.readStr();
+        script_h.readVariable();
         script_h.pushVariable();
         if ( script_h.getEndStatus() & ScriptHandler::END_COMMA ){
-            bexec_int_flag = true;
-            script_h.readInt();
+            bexec_2nd_flag = true;
+            script_h.readVariable();
         }
         getpageup_flag = true;
         getpagedown_flag = true;
@@ -3623,12 +3623,25 @@ int ONScripter::btnwaitCommand()
     num_chars_in_sentence = 0;
 
     if (bexec_flag){
-        setStr( &script_h.getVariableData(script_h.pushed_variable.var_no).str, current_button_state.str );
-        if (bexec_int_flag){
+        if (script_h.pushed_variable.type == ScriptHandler::VAR_STR){
+            setStr( &script_h.getVariableData(script_h.pushed_variable.var_no).str, current_button_state.str );
+        }
+        else{
             if (current_button_state.button >= 0)
-                script_h.setInt( &script_h.current_variable, current_button_state.button );
+                script_h.setInt(&script_h.pushed_variable, current_button_state.button );
             else
-                script_h.setInt( &script_h.current_variable, -1);
+                script_h.setInt(&script_h.pushed_variable, -1);
+        }
+        if (bexec_2nd_flag){
+            if (script_h.current_variable.type == ScriptHandler::VAR_STR){
+                setStr( &script_h.getVariableData(script_h.current_variable.var_no).str, current_button_state.str );
+            }
+            else{
+                if (current_button_state.button >= 0)
+                    script_h.setInt(&script_h.current_variable, current_button_state.button );
+                else
+                    script_h.setInt(&script_h.current_variable, -1);
+            }
         }
     }
     else{

@@ -120,7 +120,7 @@ static jmethodID JavaGetFD = NULL;
 static jmethodID JavaMkdir = NULL;
 static long *fd_start_offset = NULL;
 static long *fd_length= NULL;
-static long max_fd = 0;
+static long max_fd = -1;
 
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved)
 {
@@ -184,7 +184,7 @@ void playVideoAndroid(const char *filename)
 
 static void resize_fd_buffer(int fd)
 {
-    if (fd >= max_fd){
+    if (max_fd < fd){
         long *tmp_fd_start_offset = fd_start_offset;
         fd_start_offset = new long[fd + 1];
         memset(fd_start_offset, sizeof(long)*(fd + 1), 0);
@@ -193,14 +193,14 @@ static void resize_fd_buffer(int fd)
         fd_length = new long[fd + 1];
         memset(fd_length, sizeof(long)*(fd + 1), 0);
         
-        if (max_fd > 0){
-            memcpy(fd_start_offset, tmp_fd_start_offset, sizeof(long)*max_fd);
+        if (max_fd >= 0){
+            memcpy(fd_start_offset, tmp_fd_start_offset, sizeof(long)*(max_fd + 1));
             delete[] tmp_fd_start_offset;
-            memcpy(fd_length, tmp_fd_length, sizeof(long)*max_fd);
+            memcpy(fd_length, tmp_fd_length, sizeof(long)*(max_fd + 1));
             delete[] tmp_fd_length;
         }
         
-        max_fd = fd + 1;
+        max_fd = fd;
     }
 }
 
@@ -272,14 +272,16 @@ FILE *fopen_ons(const char *path, const char *mode)
     if (mode[0] == 'w') mode2 = 1;
 
     FILE *fp = fopen(path, mode);
-    if (mode2 == 0 && fp){
-        int fd = fileno(fp);
-        resize_fd_buffer(fd);
-        
-        fd_start_offset[fd] = 0;
-        fseek(fp, 0, SEEK_END);
-        fd_length[fd] = ftell(fp);
-        fseek(fp, 0, SEEK_SET);
+    if (fp){
+        if (mode2 == 0){
+            int fd = fileno(fp);
+            resize_fd_buffer(fd);
+            
+            fd_start_offset[fd] = 0;
+            fseek(fp, 0, SEEK_END);
+            fd_length[fd] = ftell(fp);
+            fseek(fp, 0, SEEK_SET);
+        }
         
         return fp;
     }

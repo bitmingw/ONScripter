@@ -11,6 +11,9 @@ a:active{ color: #FF0000; text-decoration: underline; }
 a:hover{ background-color: #ccffcc; }
 
 html{
+    left: 0px;
+    margin: 0px;
+    padding: 0px;
     font-size: 16px;
     line-height: 1.6em;
     font-family: sans-selif;
@@ -29,30 +32,40 @@ h3{
     font-size: 20px;
 }
 
-h3, h4, h5{
+h4, h5, h6{
     font-size: 16px;
 }
 
 body{
-text-align: left;
-color: black;
-background-color: gray;
+    left: 0px;
+    margin: 0px;
+    padding: 0px;
+    text-align: left;
+    color: black;
+    background-color: gray;
 }
 
 p{
-margin: 10px;
-text-indent: 1em;
+    margin: 10px;
+    text-indent: 1em;
 }
 
 p.noindent{
-margin: 10px;
-text-indent: 0em;
+    margin: 10px;
+    text-indent: 0em;
+}
+
+img {
+    max-width: 100%;
 }
 
 /* -------------------- */
 /* general page */
 
 #body{
+    left: 0px;
+    margin: 0px;
+    padding: 0px;
     position: absolute;
     background-color: white;
 }
@@ -252,11 +265,14 @@ text-decoration: underline;
 /* -------------------- */
 /* misc */
 table {
-text-align: left;
-color: black;
-background-color: #fcfcff;
-margin: 5px;
-padding: 2pt;
+    text-align: left;
+    color: black;
+    background-color: #fcfcff;
+    margin: 5px;
+    padding: 2pt;
+    max-width: 100%;
+    table-layout: fixed;
+    word-break: break-all;
 }
 
 th {
@@ -344,7 +360,7 @@ text-indent: 0;
         font-size: 18px;
     }
 
-    h3, h4, h5{
+    h4, h5, h6{
         font-size: 16px;
     }
     
@@ -376,5 +392,7 @@ text-indent: 0;
         left: 0;
         margin-left: 0;
         width: 100%;
+	word-wrap: break-word;
+	overflow-wrap: break-word;
     }
 }
